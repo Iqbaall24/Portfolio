@@ -226,7 +226,7 @@ td:first-child{text-align:left;}
     <button class="dchip" data-p="ytd">YTD</button>
     <button class="dchip" data-p="fy">FY</button>
     <button class="dchip active" data-p="all">All</button>
-    <span class="drange">10/07/2024 – 23/10/2026</span>
+    <span class="drange" id="dateRange">10/07/2024 – 24/10/2026</span>
     <div class="spacer"></div>
     <button class="btn" id="refreshBtn" style="padding:5px 11px;font-size:12px;">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
@@ -284,7 +284,7 @@ td:first-child{text-align:left;}
   <div class="chart-card">
     <div class="chart-hdr">
       <div class="chart-ttl">Investment Value</div>
-      <div style="font-size:11px;color:var(--fg3);">All time · IDR</div>
+      <div style="font-size:11px;color:var(--fg3);" id="chartSub">All time · IDR</div>
     </div>
     <div class="chart-wrap">
       <canvas id="pfChart"></canvas>
@@ -382,12 +382,53 @@ const DEF = {
   chartValues:[2800000,3100000,4050000,4400000,5200000,4700000,4850000,5100000,5400000,5300000,5196473],
 };
 
+// ─── CHART PERIOD DATA ───
+const CHART_PERIODS = {
+  today: {
+    labels:['00:00','02:00','04:00','06:00','08:00','10:00','12:00','14:00','16:00','18:00','20:00','Now'],
+    values:[5180000,5175000,5168000,5172000,5185000,5192000,5188000,5195000,5199000,5201000,5198000,5196473],
+    range:'24/10/2026',
+    sub:'Today · IDR'
+  },
+  '7d': {
+    labels:['18 Okt','19 Okt','20 Okt','21 Okt','22 Okt','23 Okt','24 Okt'],
+    values:[5120000,5085000,5140000,5160000,5175000,5188000,5196473],
+    range:'18/10/2026 – 24/10/2026',
+    sub:'7 Hari · IDR'
+  },
+  '12m': {
+    labels:['Nov\'25','Des\'25','Jan\'26','Feb\'26','Mar\'26','Apr\'26','Mei\'26','Jun\'26','Jul\'26','Agu\'26','Sep\'26','Okt\'26'],
+    values:[4950000,5050000,5100000,5150000,5250000,5400000,5350000,5280000,5300000,5250000,5220000,5196473],
+    range:'24/10/2025 – 24/10/2026',
+    sub:'12 Bulan · IDR'
+  },
+  ytd: {
+    labels:['Jan\'26','Feb\'26','Mar\'26','Apr\'26','Mei\'26','Jun\'26','Jul\'26','Agu\'26','Sep\'26','Okt\'26'],
+    values:[5100000,5150000,5250000,5400000,5350000,5280000,5300000,5250000,5220000,5196473],
+    range:'01/01/2026 – 24/10/2026',
+    sub:'Year to Date · IDR'
+  },
+  fy: {
+    labels:['Jul\'25','Agu\'25','Sep\'25','Okt\'25','Nov\'25','Des\'25','Jan\'26','Feb\'26','Mar\'26','Apr\'26','Mei\'26','Jun\'26','Jul\'26','Agu\'26','Sep\'26','Okt\'26'],
+    values:[4700000,4780000,4820000,4850000,4950000,5050000,5100000,5150000,5250000,5400000,5350000,5280000,5300000,5250000,5220000,5196473],
+    range:'01/07/2025 – 24/10/2026',
+    sub:'Financial Year · IDR'
+  },
+  all: {
+    labels:['Jul\'24','Sep\'24','Nov\'24','Feb\'25','Mei\'25','Jul\'25','Okt\'25','Jan\'26','Apr\'26','Jul\'26','Okt\'26'],
+    values:[2800000,3100000,4050000,4400000,5200000,4700000,4850000,5100000,5400000,5300000,5196473],
+    range:'10/07/2024 – 24/10/2026',
+    sub:'Semua Waktu · IDR'
+  }
+};
+
 // ─── STATE ───
 let S = loadS();
 let editMode = false;
 let btcIDR = S.lastBtcIDR || DEF.lastBtcIDR;
 let btcUSD = S.lastBtcUSD || DEF.lastBtcUSD;
 let chart = null;
+let activePeriod = 'all';
 
 function loadS(){
   try{
@@ -480,11 +521,11 @@ function recalc(){
   g('mTot',totPct); document.getElementById('mTot').textContent=fPct(totPct);
   document.getElementById('mTotAmt').textContent=(totAmt>=0?'+':'')+fRp(totAmt);
 
-  // Update last chart point
+  // Update last chart point for active period
   if(chart){
-    const vals=S.chartValues||DEF.chartValues;
-    const updated=[...vals];
-    updated[updated.length-1]=Math.round(btcVal);
+    const pd=CHART_PERIODS[activePeriod];
+    const updated=[...(pd?pd.values:(S.chartValues||DEF.chartValues))];
+    updated[updated.length-1]=Math.round(btcVal)||updated[updated.length-1];
     chart.data.datasets[0].data=updated;
     chart.update('none');
   }
@@ -558,12 +599,28 @@ function renderTables(){
     <td><span class="rpill pos">Avg +143.62%</span></td></tr>`;
 }
 
+// ─── SWITCH PERIOD ───
+function switchPeriod(p){
+  activePeriod=p;
+  const pd=CHART_PERIODS[p];
+  if(!pd||!chart) return;
+  const vals=[...pd.values];
+  const live=Math.round(S.crypto[0].qty*btcIDR);
+  if(live) vals[vals.length-1]=live;
+  chart.data.labels=pd.labels;
+  chart.data.datasets[0].data=vals;
+  chart.update();
+  document.getElementById('dateRange').textContent=pd.range;
+  document.getElementById('chartSub').textContent=pd.sub;
+}
+
 // ─── CHART ───
 function initChart(){
   const canvas=document.getElementById('pfChart');
   const ctx=canvas.getContext('2d');
-  const labels=S.chartLabels||DEF.chartLabels;
-  const values=[...(S.chartValues||DEF.chartValues)];
+  const pd=CHART_PERIODS.all;
+  const labels=pd.labels;
+  const values=[...pd.values];
   values[values.length-1]=Math.round(S.crypto[0].qty*btcIDR)||values[values.length-1];
 
   const grad=ctx.createLinearGradient(0,0,0,180);
@@ -659,6 +716,7 @@ document.getElementById('rateBtn').addEventListener('click',()=>{
 document.querySelectorAll('.dchip').forEach(c=>c.addEventListener('click',function(){
   document.querySelectorAll('.dchip').forEach(x=>x.classList.remove('active'));
   this.classList.add('active');
+  switchPeriod(this.dataset.p);
 }));
 
 // ─── INIT ───
