@@ -554,7 +554,7 @@ const DEF = {
     {symbol:'ETH', name:'Ethereum', qty:0, avgBuy:0, avgBuyUSDT:0, costBase:0, retPct:31.42, color:'#627EEA', active:false},
     {symbol:'SOL', name:'Solana',   qty:0, avgBuy:0, avgBuyUSDT:0, costBase:0, retPct:6.19,  color:'#9945FF', active:false},
     {symbol:'USDT',name:'Tether',   qty:0, avgBuy:0, avgBuyUSDT:0, costBase:0, retPct:4.47,  color:'#26A17B', active:false},
-    {symbol:'XRP', name:'XRP',      qty:0, avgBuy:0, avgBuyUSDT:0, costBase:0, retPct:18.99, color:'#00AAE4', active:false},
+    {symbol:'XRP', name:'XRP',      qty:1, avgBuy:23056, avgBuyUSDT:1.28, costBase:23056, retPct:0.17, color:'#00AAE4', active:true},
   ],
   idx: [
     {symbol:'BACH',name:'PT Bach Multi Global Tbk',                        qty:0, avgBuy:560.67, costBase:0, retPct:1.30,   color:'#E53E3E', active:false},
@@ -630,6 +630,8 @@ let idxPrices = {
   BACH:560, WBSA:645, BBCA:8550, BBRI:3740,
   BMRI:5675, BBNI:3890, IPCC:1020, IHSG:7420
 };
+// IDX daily change { SYM: {pct: float, amt: int} }
+let idxChanges = {};
 
 // Modal state
 let modalState = { assetType:'crypto', tradeType:'buy' };
@@ -645,12 +647,18 @@ function loadS(){
     const base = JSON.parse(JSON.stringify(DEF));
     const merged = Object.assign(base, raw);
     merged.crypto = (raw.crypto || DEF.crypto).map((a,i) =>
-      Object.assign({...DEF.crypto[i]}, a));
-    // Symbol-keyed merge so new DEF stocks always appear
+      Object.assign({...DEF.crypto[i]}, a, {name: DEF.crypto[i].name}));
+    // Fix XRP if qty got corrupted (e.g. duplicate add-trade)
+    const xrpDef = DEF.crypto.find(c => c.symbol === 'XRP');
+    const xrpIdx = merged.crypto.findIndex(c => c.symbol === 'XRP');
+    if(xrpIdx >= 0 && xrpDef && merged.crypto[xrpIdx].qty !== xrpDef.qty){
+      merged.crypto[xrpIdx] = {...xrpDef};
+    }
+    // Symbol-keyed merge so new DEF stocks always appear; force name from DEF
     const savedIdxMap = {};
     (raw.idx || []).forEach(a => { savedIdxMap[a.symbol] = a; });
     merged.idx = DEF.idx.map(d =>
-      savedIdxMap[d.symbol] ? Object.assign({...d}, savedIdxMap[d.symbol]) : {...d});
+      savedIdxMap[d.symbol] ? Object.assign({...d}, savedIdxMap[d.symbol], {name: d.name}) : {...d});
     return merged;
   }catch(e){ return JSON.parse(JSON.stringify(DEF)); }
 }
@@ -685,8 +693,14 @@ async function fetchIDXPrices(){
           {mode:'cors', signal: AbortSignal.timeout(8000)});
         if(r.ok){
           const d = await r.json();
-          const price = d?.chart?.result?.[0]?.meta?.regularMarketPrice;
+          const meta = d?.chart?.result?.[0]?.meta;
+          const price = meta?.regularMarketPrice;
           if(price && price > 0) idxPrices[sym] = Math.round(price);
+          const changePct = meta?.regularMarketChangePercent;
+          const changeAmt = meta?.regularMarketChange;
+          if(changePct !== undefined && changePct !== null){
+            idxChanges[sym] = {pct: changePct, amt: Math.round(changeAmt || 0)};
+          }
         }
       }catch(e){}
     })
@@ -992,11 +1006,23 @@ function renderTables(){
         <td><input class="e-input" data-t="idx" data-i="${i}" data-f="retPct" value="${retPct.toFixed(2)}" type="number" step="0.01" style="width:80px;"></td>
       </tr>`;
     } else {
-      const priceDisplay = livePrice > 0
-        ? `<span class="mono">IDR ${livePrice.toLocaleString('id-ID')}</span>`
-        : '<span style="color:var(--fg3);">—</span>';
+      // Price with day change %
+      let priceDisplay;
+      if(livePrice > 0){
+        const chg = idxChanges[a.symbol];
+        const chgHtml = chg
+          ? `<div class="sub ${chg.pct >= 0 ? 'pos' : 'neg'}">${chg.pct >= 0 ? '+' : ''}${chg.pct.toFixed(2)}%</div>`
+          : '';
+        priceDisplay = `<div class="td-avg"><div class="mono">IDR ${livePrice.toLocaleString('id-ID')}</div>${chgHtml}</div>`;
+      } else {
+        priceDisplay = '<span style="color:var(--fg3);">—</span>';
+      }
       const valueDisplay = (a.active && valIDR > 0)
         ? `<span class="mono">IDR ${valIDR.toLocaleString('id-ID')}</span>`
+        : '<span style="color:var(--fg3);">—</span>';
+      // Avg buy: only show when holding (qty > 0)
+      const avgBuyDisplay = a.qty > 0
+        ? `<span class="mono">IDR ${(a.avgBuy||0).toLocaleString('id-ID',{minimumFractionDigits:0})}</span>`
         : '<span style="color:var(--fg3);">—</span>';
 
       ih += `<tr class="row-click" onclick="openDetail('idx',${i})">
@@ -1005,7 +1031,7 @@ function renderTables(){
             <div class="aname">${a.symbol}</div>
             <div class="afull" style="max-width:220px;white-space:normal;line-height:1.3;">${a.name}</div>
           </div></div></td>
-        <td class="mono">IDR ${(a.avgBuy||0).toLocaleString('id-ID',{minimumFractionDigits:0})}</td>
+        <td>${avgBuyDisplay}</td>
         <td>${priceDisplay}</td>
         <td>${a.qty > 0 ? '<span class="mono">'+a.qty.toLocaleString('id-ID')+'</span>' : '<span class="closed">CLOSED</span>'}</td>
         <td>${valueDisplay}</td>
