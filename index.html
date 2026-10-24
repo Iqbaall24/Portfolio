@@ -280,6 +280,41 @@ td:first-child{text-align:left;}
 .di-val2{font-size:11px;color:var(--fg2);font-variant-numeric:tabular-nums;}
 .di-val.pos{color:var(--green);}
 .di-val.neg{color:var(--red);}
+
+/* ── CHART CLOCK ── */
+.chart-clock-bar{display:flex;align-items:center;justify-content:flex-end;
+  padding:6px 14px 8px;border-top:1px solid var(--border);margin-top:4px;}
+.chart-clock{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11px;
+  color:var(--fg3);letter-spacing:.5px;}
+.chart-clock .tz-lbl{color:var(--fg2);margin-left:5px;font-weight:600;}
+
+/* ── TRADE HISTORY ── */
+.trade-section{margin-top:16px;padding-top:14px;border-top:1px solid var(--border);}
+.trade-sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.trade-sec-ttl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--fg2);}
+.trade-tbl-wrap{border:1px solid var(--border);border-radius:8px;overflow:hidden;overflow-x:auto;}
+.trade-tbl{width:100%;border-collapse:collapse;min-width:460px;}
+.trade-tbl thead th{background:var(--bg-hover);padding:7px 10px;text-align:right;font-size:10px;
+  font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--fg3);
+  border-bottom:1px solid var(--border);white-space:nowrap;}
+.trade-tbl thead th:first-child{text-align:left;}
+.trade-tbl tbody tr{border-bottom:1px solid var(--border);}
+.trade-tbl tbody tr:last-child{border-bottom:none;}
+.trade-tbl td{padding:8px 10px;text-align:right;font-size:12px;font-variant-numeric:tabular-nums;vertical-align:middle;}
+.trade-tbl td:first-child{text-align:left;}
+.trade-pill{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.3px;}
+.trade-pill.buy{background:rgba(52,199,89,.15);color:var(--green);}
+.trade-pill.sell{background:rgba(255,69,58,.12);color:var(--red);}
+.trade-action-btn{background:none;border:none;color:var(--fg3);cursor:pointer;padding:3px 6px;
+  border-radius:4px;font-size:11px;transition:.15s;font-family:inherit;line-height:1;}
+.trade-action-btn:hover{color:var(--fg);background:var(--bg-hover);}
+.trade-action-btn.del:hover{color:var(--red);}
+.trade-add-btn{width:100%;margin-top:10px;padding:9px 14px;border-radius:8px;
+  border:1px dashed var(--border2);background:none;color:var(--fg2);font-family:inherit;
+  font-size:13px;cursor:pointer;transition:.15s;display:flex;align-items:center;
+  justify-content:center;gap:6px;}
+.trade-add-btn:hover{border-color:var(--accent);color:var(--accent);}
+.trade-empty{text-align:center;color:var(--fg3);padding:16px;font-size:12px;}
 </style>
 
 <!-- NAV -->
@@ -379,6 +414,9 @@ td:first-child{text-align:left;}
     <div class="chart-wrap">
       <canvas id="pfChart"></canvas>
     </div>
+    <div class="chart-clock-bar">
+      <span class="chart-clock"><span id="witClock">—:—:—</span><span class="tz-lbl">WIT</span></span>
+    </div>
   </div>
 
   <!-- EDIT BAR -->
@@ -405,9 +443,9 @@ td:first-child{text-align:left;}
       <table>
         <thead><tr>
           <th>Asset</th>
-          <th>Avg Buy Price</th>
+          <th>Avg Buy</th>
           <th>Price (USDT)</th>
-          <th>Quantity</th>
+          <th>Qty</th>
           <th>Value</th>
           <th>Return</th>
         </tr></thead>
@@ -529,6 +567,32 @@ td:first-child{text-align:left;}
     <div class="detail-stats" id="dStats"></div>
     <!-- Investment details -->
     <div class="detail-inv" id="dInv"></div>
+    <!-- Trade History -->
+    <div class="trade-section">
+      <div class="trade-sec-hdr">
+        <span class="trade-sec-ttl">Trade History</span>
+        <span class="badge" id="dTradesCount">0</span>
+      </div>
+      <div class="trade-tbl-wrap">
+        <table class="trade-tbl">
+          <thead><tr>
+            <th>Date</th>
+            <th>Type</th>
+            <th>Qty</th>
+            <th>Price</th>
+            <th>Value (IDR)</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="dTradesBody">
+            <tr><td colspan="6" class="trade-empty">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <button class="trade-add-btn" onclick="openAddModalFromDetail()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add trade or adjustment
+      </button>
+    </div>
   </div>
 </div>
 
@@ -634,7 +698,10 @@ let idxPrices = {
 let idxChanges = {};
 
 // Modal state
-let modalState = { assetType:'crypto', tradeType:'buy' };
+let modalState = { assetType:'crypto', tradeType:'buy', editTradeId: null };
+
+// Detail state (tracks which asset detail panel is open)
+let detailState = null; // { type: 'crypto'|'idx', idx: number }
 
 // Detail chart instance
 let detailChartInst = null;
@@ -648,17 +715,28 @@ function loadS(){
     const merged = Object.assign(base, raw);
     merged.crypto = (raw.crypto || DEF.crypto).map((a,i) =>
       Object.assign({...DEF.crypto[i]}, a, {name: DEF.crypto[i].name}));
-    // Fix XRP if qty got corrupted (e.g. duplicate add-trade)
-    const xrpDef = DEF.crypto.find(c => c.symbol === 'XRP');
-    const xrpIdx = merged.crypto.findIndex(c => c.symbol === 'XRP');
-    if(xrpIdx >= 0 && xrpDef && merged.crypto[xrpIdx].qty !== xrpDef.qty){
-      merged.crypto[xrpIdx] = {...xrpDef};
-    }
     // Symbol-keyed merge so new DEF stocks always appear; force name from DEF
     const savedIdxMap = {};
     (raw.idx || []).forEach(a => { savedIdxMap[a.symbol] = a; });
     merged.idx = DEF.idx.map(d =>
       savedIdxMap[d.symbol] ? Object.assign({...d}, savedIdxMap[d.symbol], {name: d.name}) : {...d});
+    // Initialize trades[] for any asset that doesn't have one yet
+    merged.crypto.forEach(a => {
+      if(!Array.isArray(a.trades)){
+        a.trades = a.qty > 0
+          ? [{id:'init_'+a.symbol+'_0', date:'—', type:'buy', qty:a.qty,
+              price:a.avgBuyUSDT||0, fees:0, valueIDR:a.costBase||0, status:'confirmed'}]
+          : [];
+      }
+    });
+    merged.idx.forEach(a => {
+      if(!Array.isArray(a.trades)){
+        a.trades = a.qty > 0
+          ? [{id:'init_'+a.symbol+'_0', date:'—', type:'buy', qty:a.qty,
+              price:a.avgBuy||0, fees:0, valueIDR:a.costBase||0, status:'confirmed'}]
+          : [];
+      }
+    });
     return merged;
   }catch(e){ return JSON.parse(JSON.stringify(DEF)); }
 }
@@ -1257,6 +1335,7 @@ function openAddModal(type){
 
 function closeAddModal(){
   document.getElementById('addModal').hidden = true;
+  modalState.editTradeId = null;
 }
 
 function setModalType(t){
@@ -1342,52 +1421,47 @@ function updateModalTotal(){
 }
 
 function saveAddTrade(){
-  const t          = modalState.assetType;
-  const tradeType  = modalState.tradeType;
-  const assetIdx   = parseInt(document.getElementById('mAsset').value);
-  const qty        = parseFloat(document.getElementById('mQty').value) || 0;
-  const price      = parseFloat(document.getElementById('mPrice').value) || 0;
+  const t         = modalState.assetType;
+  const tradeType = modalState.tradeType;
+  const assetIdx  = parseInt(document.getElementById('mAsset').value);
+  const qty       = parseFloat(document.getElementById('mQty').value) || 0;
+  const price     = parseFloat(document.getElementById('mPrice').value) || 0;
+  const date      = document.getElementById('mDate').value || '—';
 
-  if(qty <= 0 || price <= 0){
-    toast('Isi quantity dan harga dengan benar!');
-    return;
-  }
+  if(qty <= 0 || price <= 0){ toast('Isi quantity dan harga dengan benar!'); return; }
 
   const asset = S[t][assetIdx];
   if(!asset){ toast('Asset tidak ditemukan!'); return; }
+  if(!Array.isArray(asset.trades)) asset.trades = [];
 
-  if(tradeType === 'buy'){
-    const prevQty  = asset.qty || 0;
-    const prevCost = asset.costBase || 0;
-    const tradeCost = qty * price;
+  const valueIDR = t === 'crypto'
+    ? Math.round(qty * price * usdtIDR)
+    : Math.round(qty * price);
 
-    if(t === 'crypto'){
-      const prevAvgUSDT = asset.avgBuyUSDT || 0;
-      const newQty = prevQty + qty;
-      const newAvgUSDT = newQty > 0
-        ? (prevQty * prevAvgUSDT + qty * price) / newQty : price;
-      asset.avgBuyUSDT = newAvgUSDT;
-      asset.avgBuy = Math.round(newAvgUSDT * usdtIDR);
-      asset.qty = newQty;
-      asset.costBase = prevCost + Math.round(tradeCost * usdtIDR);
-    } else {
-      const prevAvg = asset.avgBuy || 0;
-      const newQty  = prevQty + qty;
-      const newAvg  = newQty > 0 ? (prevQty * prevAvg + qty * price) / newQty : price;
-      asset.avgBuy   = newAvg;
-      asset.qty      = newQty;
-      asset.costBase = prevCost + tradeCost;
+  if(modalState.editTradeId){
+    // Update existing trade
+    const tIdx = asset.trades.findIndex(tr => tr.id === modalState.editTradeId);
+    if(tIdx >= 0){
+      asset.trades[tIdx] = {
+        ...asset.trades[tIdx],
+        date, type: tradeType, qty, price, valueIDR
+      };
     }
-    asset.active = true;
   } else {
-    // Sell
-    const newQty = Math.max(0, (asset.qty || 0) - qty);
-    asset.qty = newQty;
-    if(newQty === 0) asset.active = false;
+    // New trade
+    const tid = String(Date.now()) + '_' + Math.random().toString(36).slice(2,7);
+    asset.trades.push({ id: tid, date, type: tradeType, qty, price, fees: 0, valueIDR, status: 'confirmed' });
   }
 
+  recalcAssetFromTrades(asset, t);
   saveS(); recalc(); closeAddModal();
   toast(`Trade ${tradeType === 'buy' ? 'Buy' : 'Sell'} disimpan ✓`, 'ok');
+
+  // Refresh detail panel if still open
+  if(!document.getElementById('detailOverlay').hidden && detailState){
+    renderDetailStats(detailState.type, S[detailState.type][detailState.idx]);
+    renderDetailTrades();
+  }
 }
 
 // ════════════════════════════════════════
@@ -1399,14 +1473,17 @@ function openDetail(type, assetIdx){
   const asset = type === 'crypto' ? S.crypto[assetIdx] : S.idx[assetIdx];
   if(!asset) return;
 
+  detailState = { type, idx: assetIdx };
+
   document.getElementById('dIcon').style.background = asset.color;
   document.getElementById('dIcon').textContent = asset.symbol.slice(0,2);
   document.getElementById('dSym').textContent  = asset.symbol;
   document.getElementById('dName').textContent = asset.name;
   document.getElementById('detailOverlay').hidden = false;
 
-  // Render stats & investment details
+  // Render stats, investment details, and trade history
   renderDetailStats(type, asset);
+  renderDetailTrades();
 
   // Load 30-day chart
   const msgEl  = document.getElementById('dChartMsg');
@@ -1441,7 +1518,192 @@ function openDetail(type, assetIdx){
 
 function closeDetail(){
   document.getElementById('detailOverlay').hidden = true;
+  detailState = null;
   if(detailChartInst){ detailChartInst.destroy(); detailChartInst = null; }
+}
+
+// ─── RECALCULATE ASSET FROM TRADES ───
+function recalcAssetFromTrades(asset, type){
+  const trades = asset.trades || [];
+  let qty = 0, totalBuyQty = 0, totalBuyCost = 0;
+
+  trades.forEach(tr => {
+    if(tr.type === 'buy'){
+      qty += tr.qty;
+      totalBuyQty += tr.qty;
+      totalBuyCost += tr.qty * tr.price;
+    } else {
+      qty = Math.max(0, qty - tr.qty);
+    }
+  });
+
+  asset.qty = qty;
+  asset.active = qty > 0;
+
+  if(totalBuyQty > 0){
+    const avgBuy = totalBuyCost / totalBuyQty;
+    if(type === 'crypto'){
+      asset.avgBuyUSDT = avgBuy;
+      asset.avgBuy     = Math.round(avgBuy * usdtIDR);
+      asset.costBase   = qty > 0 ? Math.round(qty * avgBuy * usdtIDR) : 0;
+    } else {
+      asset.avgBuy   = avgBuy;
+      asset.costBase = qty > 0 ? Math.round(qty * avgBuy) : 0;
+    }
+  } else {
+    if(type === 'crypto') asset.avgBuyUSDT = 0;
+    asset.avgBuy   = 0;
+    asset.costBase = 0;
+  }
+}
+
+// ─── RENDER TRADE HISTORY IN DETAIL PANEL ───
+function renderDetailTrades(){
+  if(!detailState) return;
+  const { type, idx } = detailState;
+  const asset = S[type][idx];
+  if(!asset) return;
+
+  const trades = asset.trades || [];
+  const countEl = document.getElementById('dTradesCount');
+  const bodyEl  = document.getElementById('dTradesBody');
+  if(countEl) countEl.textContent = trades.length;
+  if(!bodyEl) return;
+
+  if(trades.length === 0){
+    bodyEl.innerHTML = '<tr><td colspan="6" class="trade-empty">Belum ada transaksi</td></tr>';
+    return;
+  }
+
+  // Sort newest first (treat '—' as oldest)
+  const sorted = [...trades].sort((a, b) => {
+    if(a.date === '—') return 1;
+    if(b.date === '—') return -1;
+    return b.date.localeCompare(a.date);
+  });
+
+  let html = '';
+  sorted.forEach(tr => {
+    const cls  = tr.type === 'buy' ? 'buy' : 'sell';
+    const lbl  = tr.type === 'buy' ? 'BUY' : 'SELL';
+    const dStr = tr.date === '—'
+      ? '<span style="color:var(--fg3);">—</span>'
+      : tr.date;
+
+    let priceStr, valStr;
+    if(type === 'crypto'){
+      priceStr = fUSD(tr.price || 0);
+      valStr   = tr.valueIDR > 0
+        ? 'Rp '+Math.round(tr.valueIDR).toLocaleString('id-ID')
+        : fUSD((tr.qty||0) * (tr.price||0));
+    } else {
+      priceStr = 'IDR '+(tr.price||0).toLocaleString('id-ID',{maximumFractionDigits:0});
+      valStr   = 'Rp '+Math.round(tr.valueIDR||((tr.qty||0)*(tr.price||0))).toLocaleString('id-ID');
+    }
+
+    const qtyStr = fQty(tr.qty || 0, asset.symbol);
+
+    html += `<tr>
+      <td>${dStr}</td>
+      <td><span class="trade-pill ${cls}">${lbl}</span></td>
+      <td class="mono">${qtyStr}</td>
+      <td class="mono" style="font-size:11px;">${priceStr}</td>
+      <td class="mono" style="font-size:11px;">${valStr}</td>
+      <td style="white-space:nowrap;padding:6px 8px;">
+        <button class="trade-action-btn" title="Edit"
+          onclick="editTrade('${type}',${idx},'${tr.id}')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+        </button>
+        <button class="trade-action-btn del" title="Hapus"
+          onclick="deleteTrade('${type}',${idx},'${tr.id}')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6l-1 14H6L5 6"/>
+            <path d="M10 11v6M14 11v6"/>
+            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+          </svg>
+        </button>
+      </td>
+    </tr>`;
+  });
+
+  bodyEl.innerHTML = html;
+}
+
+// ─── EDIT TRADE ───
+function editTrade(type, assetIdx, tradeId){
+  const asset = S[type][assetIdx];
+  if(!asset) return;
+  const trade = (asset.trades || []).find(tr => tr.id === tradeId);
+  if(!trade) return;
+
+  modalState.assetType  = type;
+  modalState.tradeType  = trade.type;
+  modalState.editTradeId = tradeId;
+
+  document.getElementById('addModal').hidden = false;
+  setModalType(type);
+  setTradeType(trade.type);
+
+  // Pre-select the asset
+  const sel = document.getElementById('mAsset');
+  for(let i = 0; i < sel.options.length; i++){
+    if(parseInt(sel.options[i].value) === assetIdx){ sel.selectedIndex = i; break; }
+  }
+
+  document.getElementById('mDate').value  = trade.date === '—'
+    ? new Date().toISOString().split('T')[0] : trade.date;
+  document.getElementById('mQty').value   = trade.qty;
+  document.getElementById('mPrice').value = trade.price;
+  document.getElementById('mNotes').value = trade.notes || '';
+  updateModalTotal();
+}
+
+// ─── DELETE TRADE ───
+function deleteTrade(type, assetIdx, tradeId){
+  const asset = S[type][assetIdx];
+  if(!asset || !asset.trades) return;
+  const tIdx = asset.trades.findIndex(tr => tr.id === tradeId);
+  if(tIdx < 0) return;
+
+  if(!confirm('Hapus transaksi ini?')) return;
+
+  asset.trades.splice(tIdx, 1);
+  recalcAssetFromTrades(asset, type);
+  saveS(); recalc();
+  renderDetailStats(type, S[type][assetIdx]);
+  renderDetailTrades();
+  toast('Transaksi dihapus', 'ok');
+}
+
+// ─── OPEN ADD MODAL FROM DETAIL PANEL ───
+function openAddModalFromDetail(){
+  if(!detailState) return;
+  const { type, idx } = detailState;
+
+  modalState.assetType  = type;
+  modalState.tradeType  = 'buy';
+  modalState.editTradeId = null;
+
+  document.getElementById('addModal').hidden = false;
+  setModalType(type);
+  setTradeType('buy');
+
+  // Pre-select the current asset
+  const sel = document.getElementById('mAsset');
+  for(let i = 0; i < sel.options.length; i++){
+    if(parseInt(sel.options[i].value) === idx){ sel.selectedIndex = i; break; }
+  }
+
+  document.getElementById('mDate').value  = new Date().toISOString().split('T')[0];
+  document.getElementById('mQty').value   = '';
+  document.getElementById('mPrice').value = '';
+  document.getElementById('mNotes').value = '';
+  onAssetChange();
+  updateModalTotal();
 }
 
 function renderDetailStats(type, asset){
@@ -1684,6 +1946,15 @@ function initClock(){
       const ss = String(now.getSeconds()).padStart(2,'0');
       const el = document.getElementById('navClock');
       if(el) el.textContent = `${hh}:${mm}:${ss} ${tzLabel}`;
+
+      // WIT clock (UTC+9) under chart
+      const witEl = document.getElementById('witClock');
+      if(witEl){
+        const wH = String((now.getUTCHours() + 9) % 24).padStart(2,'0');
+        const wM = String(now.getUTCMinutes()).padStart(2,'0');
+        const wS = String(now.getUTCSeconds()).padStart(2,'0');
+        witEl.textContent = `${wH}:${wM}:${wS}`;
+      }
     }catch(e){}
   }
   tick();
