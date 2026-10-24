@@ -315,6 +315,59 @@ td:first-child{text-align:left;}
   justify-content:center;gap:6px;}
 .trade-add-btn:hover{border-color:var(--accent);color:var(--accent);}
 .trade-empty{text-align:center;color:var(--fg3);padding:16px;font-size:12px;}
+
+/* ── MOBILE RESPONSIVE ── */
+@media(max-width:768px){
+  /* Nav */
+  .nav{ height:48px; gap:2px; padding:0 max(12px,env(safe-area-inset-right,0px)) 0 max(12px,env(safe-area-inset-left,0px)); }
+  .nav-brand span{ display:none; }
+  .nav-item{ padding:5px 8px; font-size:12px; }
+  .nav-clock{ font-size:11px; padding:3px 7px; }
+
+  /* Main layout */
+  .main{ padding:16px max(12px,env(safe-area-inset-right,0px)) 56px max(12px,env(safe-area-inset-left,0px)); }
+
+  /* Banner */
+  .pf-banner{ padding:14px 14px; gap:12px; }
+  .pf-total{ font-size:22px; }
+  .pf-meta{ align-items:flex-start; min-width:unset; width:100%; flex-direction:row; flex-wrap:wrap; gap:8px; }
+  .pf-ts{ text-align:left; }
+
+  /* Asset pills in banner */
+  .pf-assets{ gap:8px; }
+  .pf-aico{ width:26px; height:26px; font-size:8px; }
+
+  /* Chart */
+  .chart-wrap canvas{ max-height:180px; }
+
+  /* Metrics grid already handled above */
+
+  /* Tables — horizontal scroll */
+  .tbl-wrap{ -webkit-overflow-scrolling:touch; }
+  .tbl-wrap table{ min-width:560px; }
+
+  /* Section header */
+  .sec-hdr{ flex-wrap:wrap; gap:8px; }
+
+  /* Edit bar */
+  .edit-bar{ flex-wrap:wrap; gap:8px; font-size:12px; }
+
+  /* Detail panel — already bottom sheet on mobile, just ensure full width */
+  .detail-panel{ max-width:100%; border-radius:16px 16px 0 0; }
+
+  /* Modal — slide up from bottom on mobile */
+  .modal-overlay{ align-items:flex-end; justify-content:center;
+    padding:0 0 env(safe-area-inset-bottom,0px) 0; }
+  .modal-box{ width:100%; max-width:100%; border-radius:16px 16px 0 0; margin:0; }
+}
+
+@media(max-width:480px){
+  .nav-item{ padding:4px 6px; font-size:11px; }
+  .pf-total{ font-size:20px; }
+  .pf-banner{ padding:12px; }
+  .dchip{ padding:3px 9px; font-size:11px; }
+  table{ min-width:480px; }
+}
 </style>
 
 <!-- NAV -->
@@ -365,7 +418,7 @@ td:first-child{text-align:left;}
       <div class="pf-total" id="pfTotalVal">IDR —</div>
       <div class="pf-change-row">
         <span class="rpill offline" id="pf24hPill">— 24h</span>
-        <span style="font-size:11px;color:var(--fg3);">pergerakan hari ini</span>
+        <span style="font-size:11px;color:var(--fg3);">today's movement</span>
       </div>
     </div>
     <div class="pf-meta">
@@ -408,7 +461,7 @@ td:first-child{text-align:left;}
       <div class="chart-ttl">Investment Value</div>
       <div class="chart-meta">
         <span class="chart-change pos" id="chartChangePct">—</span>
-        <span class="chart-sub" id="chartSub">Semua Waktu · IDR</span>
+        <span class="chart-sub" id="chartSub">All Time · IDR</span>
       </div>
     </div>
     <div class="chart-wrap">
@@ -422,12 +475,12 @@ td:first-child{text-align:left;}
   <!-- EDIT BAR -->
   <div class="edit-bar" id="editBar" hidden>
     <span style="font-size:16px;">✏️</span>
-    <div class="eb-text"><strong>Edit Mode</strong> — Ubah nilai langsung. Data tersimpan di browser Anda.</div>
+    <div class="eb-text"><strong>Edit Mode</strong> — Edit values directly. Data saved in your browser.</div>
     <button class="btn btn-success" id="saveBtn">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-      Simpan
+      Save
     </button>
-    <button class="btn" id="cancelBtn">Batal</button>
+    <button class="btn" id="cancelBtn">Cancel</button>
   </div>
 
   <!-- CRYPTO -->
@@ -435,8 +488,8 @@ td:first-child{text-align:left;}
     <div class="sec-hdr">
       <div class="sec-lbl">Crypto <span class="badge" id="cryptoBadge">5</span></div>
       <div style="display:flex;align-items:center;gap:8px;">
-        <div style="font-size:11px;color:var(--fg3);">Harga live · Binance</div>
-        <button class="add-btn" onclick="openAddModal('crypto')" title="Tambah aset crypto">+</button>
+        <div style="font-size:11px;color:var(--fg3);" id="cryptoStatusLabel">Live price · Binance</div>
+        <button class="add-btn" onclick="openAddModal('crypto')" title="Add crypto asset">+</button>
       </div>
     </div>
     <div class="tbl-wrap">
@@ -460,8 +513,8 @@ td:first-child{text-align:left;}
     <div class="sec-hdr">
       <div class="sec-lbl">IDX <span class="badge" id="idxBadge">8</span></div>
       <div style="display:flex;align-items:center;gap:8px;">
-        <div style="font-size:11px;color:var(--fg3);">Saham Indonesia · Yahoo Finance</div>
-        <button class="add-btn" onclick="openAddModal('idx')" title="Tambah saham IDX">+</button>
+        <div style="font-size:11px;color:var(--fg3);" id="idxStatusLabel">Indonesian Stocks · TradingView</div>
+        <button class="add-btn" onclick="openAddModal('idx')" title="Add IDX stock">+</button>
       </div>
     </div>
     <div class="tbl-wrap">
@@ -504,7 +557,7 @@ td:first-child{text-align:left;}
     <!-- Asset type toggle -->
     <div class="modal-type-row">
       <button class="type-btn active" id="mTypeCrypto" onclick="setModalType('crypto')">Crypto</button>
-      <button class="type-btn" id="mTypeIdx" onclick="setModalType('idx')">IDX Saham</button>
+      <button class="type-btn" id="mTypeIdx" onclick="setModalType('idx')">IDX Stock</button>
     </div>
     <!-- Trade type toggle -->
     <div class="modal-type-row">
@@ -516,7 +569,7 @@ td:first-child{text-align:left;}
       <select class="modal-select" id="mAsset" onchange="onAssetChange()"></select>
     </div>
     <div class="modal-field">
-      <label class="modal-lbl">Tanggal</label>
+      <label class="modal-lbl">Date</label>
       <input type="date" class="modal-input" id="mDate">
     </div>
     <div class="modal-field">
@@ -533,12 +586,12 @@ td:first-child{text-align:left;}
       <div class="mono modal-total-box" id="mTotal">—</div>
     </div>
     <div class="modal-field">
-      <label class="modal-lbl">Catatan (opsional)</label>
-      <input type="text" class="modal-input" id="mNotes" placeholder="contoh: beli di Pintu">
+      <label class="modal-lbl">Notes (optional)</label>
+      <input type="text" class="modal-input" id="mNotes" placeholder="e.g.: bought on Pintu">
     </div>
     <div class="modal-actions">
-      <button class="btn btn-primary" onclick="saveAddTrade()">Simpan Trade</button>
-      <button class="btn" onclick="closeAddModal()">Batal</button>
+      <button class="btn btn-primary" onclick="saveAddTrade()">Save Trade</button>
+      <button class="btn" onclick="closeAddModal()">Cancel</button>
     </div>
   </div>
 </div>
@@ -598,8 +651,8 @@ td:first-child{text-align:left;}
 
 <script>
 // ═══════════════════════════════════════════════════════
-// IQBAL CAPITAL PORTFOLIO TRACKER v4.1
-// Multi-asset · Binance Live + IDX Yahoo Finance
+// IQBAL CAPITAL PORTFOLIO TRACKER v4.2
+// Multi-asset · Binance Live + IDX TradingView
 // ═══════════════════════════════════════════════════════
 
 const SK = 'iqbal_pf_v1';
@@ -614,15 +667,15 @@ const DEF = {
   lastBtcTime: null,
   lastLivePrices: { BTC:89700, ETH:2850, SOL:178, USDT:1.0, XRP:2.15 },
   crypto: [
-    {symbol:'BTC', name:'Bitcoin',  qty:0.00353763, avgBuy:1408415000, avgBuyUSDT:88580, costBase:4982154.91, retPct:3.96,  color:'#F7931A', active:true},
-    {symbol:'ETH', name:'Ethereum', qty:0, avgBuy:0, avgBuyUSDT:0, costBase:0, retPct:31.42, color:'#627EEA', active:false},
-    {symbol:'SOL', name:'Solana',   qty:0, avgBuy:0, avgBuyUSDT:0, costBase:0, retPct:6.19,  color:'#9945FF', active:false},
-    {symbol:'USDT',name:'Tether',   qty:0, avgBuy:0, avgBuyUSDT:0, costBase:0, retPct:4.47,  color:'#26A17B', active:false},
-    {symbol:'XRP', name:'XRP',      qty:1, avgBuy:23056, avgBuyUSDT:1.28, costBase:23056, retPct:0.17, color:'#00AAE4', active:true},
+    {symbol:'BTC', name:'Bitcoin',  qty:0.00353763, avgBuy:1408415000, avgBuyUSDT:88580, costBase:4982154.91, retPct:0, color:'#F7931A', active:true},
+    {symbol:'ETH', name:'Ethereum', qty:0, avgBuy:0, avgBuyUSDT:0, costBase:0, retPct:0, color:'#627EEA', active:false},
+    {symbol:'SOL', name:'Solana',   qty:0, avgBuy:0, avgBuyUSDT:0, costBase:0, retPct:0, color:'#9945FF', active:false},
+    {symbol:'USDT',name:'Tether',   qty:0, avgBuy:0, avgBuyUSDT:0, costBase:0, retPct:0, color:'#26A17B', active:false},
+    {symbol:'XRP', name:'XRP',      qty:1, avgBuy:23056, avgBuyUSDT:1.28, costBase:23056, retPct:0, color:'#00AAE4', active:true},
   ],
   idx: [
-    {symbol:'BACH',name:'PT Bach Multi Global Tbk',                        qty:0, avgBuy:560.67, costBase:0, retPct:1.30,   color:'#E53E3E', active:false},
-    {symbol:'WBSA',name:'PT BSA Logistics Indonesia Tbk',                  qty:0, avgBuy:168.00, costBase:0, retPct:285.94, color:'#3182CE', active:false},
+    {symbol:'BACH',name:'PT Bach Multi Global Tbk',                        qty:0, avgBuy:560.67, costBase:0, retPct:0, color:'#E53E3E', active:false},
+    {symbol:'WBSA',name:'PT BSA Logistics Indonesia Tbk',                  qty:0, avgBuy:168.00, costBase:0, retPct:0, color:'#3182CE', active:false},
     {symbol:'BBCA',name:'PT Bank Central Asia Tbk',                        qty:0, avgBuy:8550,   costBase:0, retPct:0,      color:'#1565C0', active:false},
     {symbol:'BBRI',name:'PT Bank Rakyat Indonesia (Persero) Tbk',          qty:0, avgBuy:3740,   costBase:0, retPct:0,      color:'#C62828', active:false},
     {symbol:'BMRI',name:'PT Bank Mandiri (Persero) Tbk',                   qty:0, avgBuy:5675,   costBase:0, retPct:0,      color:'#F57F17', active:false},
@@ -638,33 +691,33 @@ const DEF = {
 const CHART_PERIODS = {
   today: {
     labels:['00:00','02:00','04:00','06:00','08:00','10:00','12:00','14:00','16:00','18:00','20:00','Now'],
-    values:[5180000,5175000,5168000,5172000,5185000,5192000,5188000,5195000,5199000,5201000,5198000,5196473],
+    values:[0,0,0,0,0,0,0,0,0,0,0,0],
     range:'25/10/2026', sub:'Today · IDR'
   },
   '7d': {
-    labels:['19 Okt','20 Okt','21 Okt','22 Okt','23 Okt','24 Okt','25 Okt'],
-    values:[5120000,5085000,5140000,5160000,5175000,5188000,5196473],
-    range:'19/10/2026 – 25/10/2026', sub:'7 Hari · IDR'
+    labels:['19 Oct','20 Oct','21 Oct','22 Oct','23 Oct','24 Oct','25 Oct'],
+    values:[0,0,0,0,0,0,0],
+    range:'19/10/2026 – 25/10/2026', sub:'7 Days · IDR'
   },
   '12m': {
-    labels:["Nov'25","Des'25","Jan'26","Feb'26","Mar'26","Apr'26","Mei'26","Jun'26","Jul'26","Agu'26","Sep'26","Okt'26"],
-    values:[4950000,5050000,5100000,5150000,5250000,5400000,5350000,5280000,5300000,5250000,5220000,5196473],
-    range:'25/10/2025 – 25/10/2026', sub:'12 Bulan · IDR'
+    labels:["Nov'25","Dec'25","Jan'26","Feb'26","Mar'26","Apr'26","May'26","Jun'26","Jul'26","Aug'26","Sep'26","Oct'26"],
+    values:[0,0,0,0,0,0,0,0,0,0,0,0],
+    range:'25/10/2025 – 25/10/2026', sub:'12 Months · IDR'
   },
   ytd: {
-    labels:["Jan'26","Feb'26","Mar'26","Apr'26","Mei'26","Jun'26","Jul'26","Agu'26","Sep'26","Okt'26"],
-    values:[5100000,5150000,5250000,5400000,5350000,5280000,5300000,5250000,5220000,5196473],
+    labels:["Jan'26","Feb'26","Mar'26","Apr'26","May'26","Jun'26","Jul'26","Aug'26","Sep'26","Oct'26"],
+    values:[0,0,0,0,0,0,0,0,0,0],
     range:'01/01/2026 – 25/10/2026', sub:'Year to Date · IDR'
   },
   fy: {
-    labels:["Jul'25","Agu'25","Sep'25","Okt'25","Nov'25","Des'25","Jan'26","Feb'26","Mar'26","Apr'26","Mei'26","Jun'26","Jul'26","Agu'26","Sep'26","Okt'26"],
-    values:[4700000,4780000,4820000,4850000,4950000,5050000,5100000,5150000,5250000,5400000,5350000,5280000,5300000,5250000,5220000,5196473],
+    labels:["Jul'25","Aug'25","Sep'25","Oct'25","Nov'25","Dec'25","Jan'26","Feb'26","Mar'26","Apr'26","May'26","Jun'26","Jul'26","Aug'26","Sep'26","Oct'26"],
+    values:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
     range:'01/07/2025 – 25/10/2026', sub:'Financial Year · IDR'
   },
   all: {
-    labels:["Jul'24","Sep'24","Nov'24","Feb'25","Mei'25","Jul'25","Okt'25","Jan'26","Apr'26","Jul'26","Okt'26"],
-    values:[2800000,3100000,4050000,4400000,5200000,4700000,4850000,5100000,5400000,5300000,5196473],
-    range:'10/07/2024 – 25/10/2026', sub:'Semua Waktu · IDR'
+    labels:["Jul'24","Sep'24","Nov'24","Feb'25","May'25","Jul'25","Oct'25","Jan'26","Apr'26","Jul'26","Oct'26"],
+    values:[0,0,0,0,0,0,0,0,0,0,0],
+    range:'10/07/2024 – 25/10/2026', sub:'All Time · IDR'
   }
 };
 
@@ -760,14 +813,113 @@ async function fetchUSDTIDR(){
   }catch(e){}
 }
 
-// ─── FETCH IDX PRICES ───
-async function fetchIDXPrices(){
+// ─── TRADINGVIEW IDX STREAM ───
+const IDX_TV = {
+  BACH:'IDX:BACH', WBSA:'IDX:WBSA',
+  BBCA:'IDX:BBCA', BBRI:'IDX:BBRI',
+  BMRI:'IDX:BMRI', BBNI:'IDX:BBNI',
+  IPCC:'IDX:IPCC', IHSG:'IDX:COMPOSITE'
+};
+
+function isIDXMarketOpen(){
+  const now = new Date();
+  const day = now.getUTCDay(); // 0=Sun,6=Sat
+  if(day===0||day===6) return false;
+  const mins = now.getUTCHours()*60 + now.getUTCMinutes();
+  // Session I: 02:00–04:30 UTC (120–270), Session II: 06:30–09:00 UTC (390–540)
+  return (mins>=120&&mins<=270)||(mins>=390&&mins<=540);
+}
+
+function tvEncode(obj){
+  const s = JSON.stringify(obj);
+  return `~m~${s.length}~m~${s}`;
+}
+
+let tvWs = null;
+let tvSession = '';
+
+function setIDXStatus(text){
+  const el = document.getElementById('idxStatusLabel');
+  if(el) el.textContent = text;
+}
+
+function initIDXStream(){
+  if(!isIDXMarketOpen()){
+    setIDXStatus('IDX Closed · Last Price');
+    fetchIDXFallback();
+    return;
+  }
+
+  setIDXStatus('Indonesian Stocks · Connecting…');
+
+  // Random session ID
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  tvSession = 'qs_' + Array.from({length:12}, ()=>chars[Math.floor(Math.random()*chars.length)]).join('');
+
+  try{ tvWs = new WebSocket('wss://data.tradingview.com/socket.io/websocket'); }
+  catch(e){ setIDXStatus('IDX · Offline'); fetchIDXFallback(); return; }
+
+  tvWs.onopen = ()=>{
+    tvWs.send(tvEncode({m:'set_auth_token',    p:['unauthorized_user_token']}));
+    tvWs.send(tvEncode({m:'quote_create_session',p:[tvSession]}));
+    tvWs.send(tvEncode({m:'quote_set_fields',  p:[tvSession,'lp','ch','chp']}));
+    const syms = Object.values(IDX_TV);
+    tvWs.send(tvEncode({m:'quote_add_symbols', p:[tvSession, ...syms]}));
+    setIDXStatus('Indonesian Stocks · Live · TradingView');
+  };
+
+  tvWs.onmessage = (evt)=>{
+    const raw = evt.data;
+    let pos = 0;
+    while(pos < raw.length){
+      const m1 = raw.indexOf('~m~', pos);
+      if(m1 === -1) break;
+      const m2 = raw.indexOf('~m~', m1+3);
+      if(m2 === -1) break;
+      const len = parseInt(raw.substring(m1+3, m2));
+      if(isNaN(len)){ pos = m2+3; continue; }
+      const content = raw.substring(m2+3, m2+3+len);
+      pos = m2+3+len;
+
+      // Heartbeat
+      if(content.startsWith('~h~')){
+        tvWs.send(`~m~${content.length}~m~${content}`);
+        continue;
+      }
+
+      // JSON message
+      try{
+        const msg = JSON.parse(content);
+        if(msg.m === 'qsd'){
+          const data = msg.p[1];
+          if(data.s !== 'ok') continue;
+          const tvSym = data.n;
+          const v = data.v || {};
+          const localSym = Object.entries(IDX_TV).find(([,tv])=>tv===tvSym)?.[0];
+          if(!localSym) continue;
+          if(v.lp && v.lp > 0) idxPrices[localSym] = Math.round(v.lp);
+          if(v.chp !== undefined) idxChanges[localSym] = {pct: v.chp, amt: Math.round(v.ch||0)};
+        }
+      }catch(e){}
+    }
+    renderTables();
+  };
+
+  tvWs.onclose = ()=>{
+    setIDXStatus('IDX · Reconnecting…');
+    setTimeout(()=>{ if(isIDXMarketOpen()) initIDXStream(); else fetchIDXFallback(); }, 5000);
+  };
+
+  tvWs.onerror = ()=>{ try{ tvWs.close(); }catch(e){} };
+}
+
+// Fallback: Yahoo Finance for last close (market closed)
+async function fetchIDXFallback(){
   const BASE = 'https://query1.finance.yahoo.com/v8/finance/chart/';
   await Promise.all(
     Object.entries(IDX_TICKERS).map(async ([sym, ticker]) => {
       try{
-        const r = await fetch(
-          `${BASE}${ticker}?interval=1d&range=1d`,
+        const r = await fetch(`${BASE}${ticker}?interval=1d&range=1d`,
           {mode:'cors', signal: AbortSignal.timeout(8000)});
         if(r.ok){
           const d = await r.json();
@@ -775,10 +927,8 @@ async function fetchIDXPrices(){
           const price = meta?.regularMarketPrice;
           if(price && price > 0) idxPrices[sym] = Math.round(price);
           const changePct = meta?.regularMarketChangePercent;
-          const changeAmt = meta?.regularMarketChange;
-          if(changePct !== undefined && changePct !== null){
-            idxChanges[sym] = {pct: changePct, amt: Math.round(changeAmt || 0)};
-          }
+          if(changePct !== undefined && changePct !== null)
+            idxChanges[sym] = {pct: changePct, amt: Math.round(meta?.regularMarketChange||0)};
         }
       }catch(e){}
     })
@@ -879,31 +1029,36 @@ function updateBanner(){
   });
   document.getElementById('pfTotalVal').textContent = fIDR(totalIDR);
 
-  const todayVals = CHART_PERIODS.today.values;
-  const todayStart = todayVals[0];
-  const change24h = todayStart > 0 ? (totalIDR - todayStart) / todayStart * 100 : 0;
-  const change24hAmt = totalIDR - todayStart;
+  // 24h change: use stored today-start value; if no trades yet show —
+  const todayStart = S._todayStart || 0;
   const pf24h = document.getElementById('pf24hPill');
-  pf24h.className = 'rpill ' + (change24h >= 0 ? 'pos' : 'neg');
-  const sign = change24h >= 0 ? '+' : '';
-  pf24h.innerHTML = `${sign}${change24h.toFixed(2)}% &nbsp;<span style="font-weight:400;opacity:.8;">(${change24hAmt >= 0 ? '+' : '-'}${fRp(Math.abs(change24hAmt))})</span> 24h`;
+  if(totalIDR === 0 || todayStart === 0){
+    pf24h.className = 'rpill offline';
+    pf24h.innerHTML = '— 24h';
+  } else {
+    const change24h = (totalIDR - todayStart) / todayStart * 100;
+    const change24hAmt = totalIDR - todayStart;
+    pf24h.className = 'rpill ' + (change24h >= 0 ? 'pos' : 'neg');
+    const sign = change24h >= 0 ? '+' : '';
+    pf24h.innerHTML = `${sign}${change24h.toFixed(2)}% &nbsp;<span style="font-weight:400;opacity:.8;">(${change24hAmt >= 0 ? '+' : '-'}${fRp(Math.abs(change24hAmt))})</span> 24h`;
+  }
 
   document.getElementById('pfTs').textContent = S.lastBtcTime
-    ? 'Updated ' + new Date(S.lastBtcTime).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'})
+    ? 'Updated ' + new Date(S.lastBtcTime).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'})
     : '—';
   const rateEl = document.getElementById('pfUSDTIDR');
-  if(rateEl) rateEl.textContent = `USDT/IDR ${Math.round(usdtIDR).toLocaleString('id-ID')}`;
+  if(rateEl) rateEl.textContent = `USDT/IDR ${Math.round(usdtIDR).toLocaleString('en-US')}`;
 }
 
 // ─── FORMAT HELPERS ───
-function fIDR(v){ return 'IDR '+Math.abs(v).toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2}); }
-function fRp(v){ return 'Rp '+Math.abs(v).toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fIDR(v){ return 'IDR '+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fRp(v){ return 'Rp '+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function fPct(v){ const s=v>0?'+':v<0?'-':''; return s+Math.abs(v).toFixed(2)+'%'; }
 function fQty(v,sym){
   if(!v||v===0) return '—';
   if(sym==='BTC'||sym==='ETH') return v.toFixed(8);
   if(sym==='SOL'||sym==='XRP') return v.toFixed(4);
-  return v.toLocaleString('id-ID');
+  return v.toLocaleString('en-US');
 }
 function fUSD(v){
   if(v >= 100000) return '$'+Math.round(v).toLocaleString('en-US');
@@ -925,7 +1080,6 @@ function recalc(){
       totalIDR += a.qty * usd * usdtIDR;
     }
   });
-  if(totalIDR === 0) totalIDR = btc.qty * liveBTCUSD * usdtIDR;
 
   const liveVal  = btc.qty * liveBTCUSD * usdtIDR;
   const costBase = btc.costBase || (btc.qty * avgBuyUSDT * origUSDTIDR);
@@ -950,10 +1104,11 @@ function recalc(){
   if(chart){
     const pd = CHART_PERIODS[activePeriod];
     const updated = [...(pd ? pd.values : (S.chartValues || DEF.chartValues))];
-    if(totalIDR > 0) updated[updated.length-1] = Math.round(totalIDR);
+    // Always set last point to current total (even if 0)
+    updated[updated.length-1] = Math.round(totalIDR);
     chart.data.datasets[0].data = updated;
     chart.update('none');
-    updateChartPct(updated);
+    updateChartPct(updated, totalIDR);
   }
 
   updateBanner();
@@ -961,11 +1116,23 @@ function recalc(){
 }
 
 // ─── CHART % CHANGE ───
-function updateChartPct(vals){
-  if(!vals || vals.length < 2) return;
-  const pct = vals[0] > 0 ? (vals[vals.length-1] - vals[0]) / vals[0] * 100 : 0;
+function updateChartPct(vals, totalIDR){
   const el = document.getElementById('chartChangePct');
   if(!el) return;
+  if(!vals || vals.length < 2 || (totalIDR === 0)){
+    el.textContent = '—';
+    el.className = 'chart-change';
+    return;
+  }
+  // Find first non-zero value as baseline
+  const baseline = vals.find(v => v > 0) || 0;
+  const last = vals[vals.length-1];
+  if(baseline === 0){
+    el.textContent = '—';
+    el.className = 'chart-change';
+    return;
+  }
+  const pct = (last - baseline) / baseline * 100;
   el.textContent = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
   el.className = 'chart-change ' + (pct >= 0 ? 'pos' : 'neg');
 }
@@ -1003,13 +1170,13 @@ function renderTables(){
     const avgBuyUSDT    = a.avgBuyUSDT || (a.avgBuy ? Math.round(a.avgBuy / origUSDTIDR) : 0);
     const avgBuyIDR_live = avgBuyUSDT > 0 ? avgBuyUSDT * usdtIDR : a.avgBuy;
 
-    let retPct = a.retPct;
+    let retPct = null; // null = no position
     if(a.active && a.qty > 0 && a.costBase > 0 && valIDR > 0)
       retPct = (valIDR - a.costBase) / a.costBase * 100;
 
-    const rc = retPct >= 0 ? 'pos' : 'neg';
+    const rc = retPct !== null ? (retPct >= 0 ? 'pos' : 'neg') : 'pos';
     if(a.active && a.qty > 0) { totalCryptoIDR += valIDR; cryptoActiveCnt++; }
-    cryptoRetTotal += retPct; cryptoRetCount++;
+    if(retPct !== null){ cryptoRetTotal += retPct; cryptoRetCount++; }
 
     if(editMode){
       ch += `<tr>
@@ -1021,15 +1188,15 @@ function renderTables(){
         <td class="mono" style="color:var(--fg2);">${usdPrice > 0 ? fUSD(usdPrice) : '—'}</td>
         <td><input class="e-input" data-t="crypto" data-i="${i}" data-f="qty" value="${a.qty}" type="number" step="0.00000001"></td>
         <td class="mono">${a.active && valIDR > 0 ? fIDR(valIDR) : '<span class="closed">CLOSED</span>'}</td>
-        <td><input class="e-input" data-t="crypto" data-i="${i}" data-f="retPct" value="${retPct.toFixed(2)}" type="number" step="0.01" style="width:80px;"></td>
+        <td><input class="e-input" data-t="crypto" data-i="${i}" data-f="retPct" value="${(retPct||0).toFixed(2)}" type="number" step="0.01" style="width:80px;"></td>
       </tr>`;
     } else {
       const avgBuyDisplay = avgBuyUSDT > 0
-        ? `<div class="td-avg"><div class="mono">${fUSD(avgBuyUSDT)}</div><div class="sub">IDR ${Math.round(avgBuyIDR_live).toLocaleString('id-ID')}</div></div>`
+        ? `<div class="td-avg"><div class="mono">${fUSD(avgBuyUSDT)}</div><div class="sub">IDR ${Math.round(avgBuyIDR_live).toLocaleString('en-US')}</div></div>`
         : '<span style="color:var(--fg3);">—</span>';
       const priceIDR_live = usdPrice > 0 ? usdPrice * usdtIDR : 0;
       const priceDisplay = usdPrice > 0
-        ? `<div class="td-avg"><div class="mono">${fUSD(usdPrice)}</div><div class="sub">IDR ${Math.round(priceIDR_live).toLocaleString('id-ID')}</div></div>`
+        ? `<div class="td-avg"><div class="mono">${fUSD(usdPrice)}</div><div class="sub">IDR ${Math.round(priceIDR_live).toLocaleString('en-US')}</div></div>`
         : '<span style="color:var(--fg3);">—</span>';
 
       ch += `<tr class="row-click" onclick="openDetail('crypto',${i})">
@@ -1041,7 +1208,7 @@ function renderTables(){
         <td>${priceDisplay}</td>
         <td class="mono">${a.qty ? fQty(a.qty, a.symbol) : '<span class="closed">CLOSED</span>'}</td>
         <td class="mono">${a.active && valIDR > 0 ? fIDR(valIDR) : '<span style="color:var(--fg3);">—</span>'}</td>
-        <td><span class="rpill ${rc}">${fPct(retPct)}</span></td>
+        <td>${retPct !== null ? `<span class="rpill ${rc}">${fPct(retPct)}</span>` : '<span style="color:var(--fg3);">—</span>'}</td>
       </tr>`;
     }
   });
@@ -1065,23 +1232,23 @@ function renderTables(){
     const livePrice = idxPrices[a.symbol] || a.avgBuy || 0;
     const valIDR    = (a.active && a.qty > 0 && livePrice > 0) ? a.qty * livePrice : 0;
 
-    let retPct = a.retPct;
+    let retPct = null;
     if(a.active && a.qty > 0 && a.costBase > 0 && valIDR > 0)
       retPct = (valIDR - a.costBase) / a.costBase * 100;
 
-    const rc = retPct >= 0 ? 'pos' : 'neg';
+    const rc = retPct !== null ? (retPct >= 0 ? 'pos' : 'neg') : 'pos';
     if(a.active && a.qty > 0) totalIdxIDR += valIDR;
-    idxRetTotal += retPct; idxRetCount++;
+    if(retPct !== null){ idxRetTotal += retPct; idxRetCount++; }
 
     if(editMode){
       ih += `<tr>
         <td><div class="asset"><div class="aicon" style="background:${a.color}">${a.symbol.slice(0,2)}</div>
           <div><div class="aname">${a.symbol}</div><div class="afull" style="max-width:200px;">${a.name}</div></div></div></td>
         <td><input class="e-input" data-t="idx" data-i="${i}" data-f="avgBuy" value="${a.avgBuy}" type="number" step="0.01"></td>
-        <td class="mono" style="color:var(--fg2);">${livePrice > 0 ? 'IDR '+livePrice.toLocaleString('id-ID') : '—'}</td>
+        <td class="mono" style="color:var(--fg2);">${livePrice > 0 ? 'IDR '+livePrice.toLocaleString('en-US') : '—'}</td>
         <td><input class="e-input" data-t="idx" data-i="${i}" data-f="qty" value="${a.qty}" type="number"></td>
-        <td>${a.active && valIDR > 0 ? '<span class="mono">IDR '+valIDR.toLocaleString('id-ID')+'</span>' : '<span class="closed">CLOSED</span>'}</td>
-        <td><input class="e-input" data-t="idx" data-i="${i}" data-f="retPct" value="${retPct.toFixed(2)}" type="number" step="0.01" style="width:80px;"></td>
+        <td>${a.active && valIDR > 0 ? '<span class="mono">IDR '+valIDR.toLocaleString('en-US')+'</span>' : '<span class="closed">CLOSED</span>'}</td>
+        <td><input class="e-input" data-t="idx" data-i="${i}" data-f="retPct" value="${(retPct||0).toFixed(2)}" type="number" step="0.01" style="width:80px;"></td>
       </tr>`;
     } else {
       // Price with day change %
@@ -1091,16 +1258,16 @@ function renderTables(){
         const chgHtml = chg
           ? `<div class="sub ${chg.pct >= 0 ? 'pos' : 'neg'}">${chg.pct >= 0 ? '+' : ''}${chg.pct.toFixed(2)}%</div>`
           : '';
-        priceDisplay = `<div class="td-avg"><div class="mono">IDR ${livePrice.toLocaleString('id-ID')}</div>${chgHtml}</div>`;
+        priceDisplay = `<div class="td-avg"><div class="mono">IDR ${livePrice.toLocaleString('en-US')}</div>${chgHtml}</div>`;
       } else {
         priceDisplay = '<span style="color:var(--fg3);">—</span>';
       }
       const valueDisplay = (a.active && valIDR > 0)
-        ? `<span class="mono">IDR ${valIDR.toLocaleString('id-ID')}</span>`
+        ? `<span class="mono">IDR ${valIDR.toLocaleString('en-US')}</span>`
         : '<span style="color:var(--fg3);">—</span>';
       // Avg buy: only show when holding (qty > 0)
       const avgBuyDisplay = a.qty > 0
-        ? `<span class="mono">IDR ${(a.avgBuy||0).toLocaleString('id-ID',{minimumFractionDigits:0})}</span>`
+        ? `<span class="mono">IDR ${(a.avgBuy||0).toLocaleString('en-US',{minimumFractionDigits:0})}</span>`
         : '<span style="color:var(--fg3);">—</span>';
 
       ih += `<tr class="row-click" onclick="openDetail('idx',${i})">
@@ -1111,9 +1278,9 @@ function renderTables(){
           </div></div></td>
         <td>${avgBuyDisplay}</td>
         <td>${priceDisplay}</td>
-        <td>${a.qty > 0 ? '<span class="mono">'+a.qty.toLocaleString('id-ID')+'</span>' : '<span class="closed">CLOSED</span>'}</td>
+        <td>${a.qty > 0 ? '<span class="mono">'+a.qty.toLocaleString('en-US')+'</span>' : '<span class="closed">CLOSED</span>'}</td>
         <td>${valueDisplay}</td>
-        <td><span class="rpill ${rc}">${fPct(retPct)}</span></td>
+        <td>${retPct !== null ? `<span class="rpill ${rc}">${fPct(retPct)}</span>` : '<span style="color:var(--fg3);">—</span>'}</td>
       </tr>`;
     }
   });
@@ -1125,7 +1292,7 @@ function renderTables(){
   document.getElementById('iFoot').innerHTML = `<tr class="tot-row">
     <td colspan="3" style="font-weight:700;">Total IDX</td>
     <td>—</td>
-    <td class="mono">${totalIdxIDR > 0 ? 'IDR '+totalIdxIDR.toLocaleString('id-ID') : '—'}</td>
+    <td class="mono">${totalIdxIDR > 0 ? 'IDR '+totalIdxIDR.toLocaleString('en-US') : '—'}</td>
     <td><span class="rpill ${avgIdxRc}">Avg ${fPct(avgIdxRet)}</span></td>
   </tr>`;
 
@@ -1255,7 +1422,7 @@ function initChart(){
         tooltip:{
           backgroundColor:'#12162a', borderColor:'#1f2440', borderWidth:1,
           titleColor:'#7a88b0', bodyColor:'#dde3f4',
-          callbacks:{label: c => 'IDR ' + c.raw.toLocaleString('id-ID')}
+          callbacks:{label: c => 'IDR ' + c.raw.toLocaleString('en-US')}
         }
       },
       scales:{
@@ -1294,7 +1461,7 @@ function saveEdits(){
       a.costBase = a.qty * a.avgBuyUSDT * (S.origUSDTIDR || DEF.origUSDTIDR || 15900);
   });
   saveS(); setEdit(false); recalc();
-  toast('Portfolio disimpan ✓','ok');
+  toast('Portfolio saved ✓','ok');
 }
 
 // ─── TOAST ───
@@ -1383,7 +1550,7 @@ function onAssetChange(){
     if(!a){ hint.textContent = ''; return; }
     const usdPrice = a.symbol === 'USDT' ? 1.0 : (livePrices[a.symbol] || 0);
     if(usdPrice > 0){
-      hint.textContent = `Live: ${fUSD(usdPrice)} USDT  (≈ IDR ${Math.round(usdPrice * usdtIDR).toLocaleString('id-ID')})`;
+      hint.textContent = `Live: ${fUSD(usdPrice)} USDT  (≈ IDR ${Math.round(usdPrice * usdtIDR).toLocaleString('en-US')})`;
       priceInput.value = usdPrice.toFixed(a.symbol==='BTC'?2:4);
     } else {
       hint.textContent = 'Harga belum tersedia';
@@ -1393,7 +1560,7 @@ function onAssetChange(){
     if(!a){ hint.textContent = ''; return; }
     const lp = idxPrices[a.symbol] || a.avgBuy || 0;
     if(lp > 0){
-      hint.textContent = `Live: IDR ${lp.toLocaleString('id-ID')}`;
+      hint.textContent = `Live: IDR ${lp.toLocaleString('en-US')}`;
       priceInput.value = lp;
     } else {
       hint.textContent = 'Harga belum tersedia';
@@ -1411,9 +1578,9 @@ function updateModalTotal(){
   if(qty > 0 && price > 0){
     const total = qty * price;
     if(t === 'crypto'){
-      totalEl.textContent = `${fUSD(total)} USDT  ≈  IDR ${Math.round(total * usdtIDR).toLocaleString('id-ID')}`;
+      totalEl.textContent = `${fUSD(total)} USDT  ≈  IDR ${Math.round(total * usdtIDR).toLocaleString('en-US')}`;
     } else {
-      totalEl.textContent = `IDR ${Math.round(total).toLocaleString('id-ID')}`;
+      totalEl.textContent = `IDR ${Math.round(total).toLocaleString('en-US')}`;
     }
   } else {
     totalEl.textContent = '—';
@@ -1455,7 +1622,7 @@ function saveAddTrade(){
 
   recalcAssetFromTrades(asset, t);
   saveS(); recalc(); closeAddModal();
-  toast(`Trade ${tradeType === 'buy' ? 'Buy' : 'Sell'} disimpan ✓`, 'ok');
+  toast(`Trade ${tradeType === 'buy' ? 'Buy' : 'Sell'} saved ✓`, 'ok');
 
   // Refresh detail panel if still open
   if(!document.getElementById('detailOverlay').hidden && detailState){
@@ -1493,7 +1660,7 @@ function openDetail(type, assetIdx){
   if(detailChartInst){ detailChartInst.destroy(); detailChartInst = null; }
 
   if(type === 'crypto' && asset.symbol === 'USDT'){
-    msgEl.textContent = 'Stablecoin · $1.00 = IDR ' + Math.round(usdtIDR).toLocaleString('id-ID');
+    msgEl.textContent = 'Stablecoin · $1.00 = IDR ' + Math.round(usdtIDR).toLocaleString('en-US');
     msgEl.hidden  = false;
     wrapEl.hidden = true;
     return;
@@ -1594,11 +1761,11 @@ function renderDetailTrades(){
     if(type === 'crypto'){
       priceStr = fUSD(tr.price || 0);
       valStr   = tr.valueIDR > 0
-        ? 'Rp '+Math.round(tr.valueIDR).toLocaleString('id-ID')
+        ? 'Rp '+Math.round(tr.valueIDR).toLocaleString('en-US')
         : fUSD((tr.qty||0) * (tr.price||0));
     } else {
-      priceStr = 'IDR '+(tr.price||0).toLocaleString('id-ID',{maximumFractionDigits:0});
-      valStr   = 'Rp '+Math.round(tr.valueIDR||((tr.qty||0)*(tr.price||0))).toLocaleString('id-ID');
+      priceStr = 'IDR '+(tr.price||0).toLocaleString('en-US',{maximumFractionDigits:0});
+      valStr   = 'Rp '+Math.round(tr.valueIDR||((tr.qty||0)*(tr.price||0))).toLocaleString('en-US');
     }
 
     const qtyStr = fQty(tr.qty || 0, asset.symbol);
@@ -1617,7 +1784,7 @@ function renderDetailTrades(){
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
           </svg>
         </button>
-        <button class="trade-action-btn del" title="Hapus"
+        <button class="trade-action-btn del" title="Delete"
           onclick="deleteTrade('${type}',${idx},'${tr.id}')">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <polyline points="3 6 5 6 21 6"/>
@@ -1669,14 +1836,14 @@ function deleteTrade(type, assetIdx, tradeId){
   const tIdx = asset.trades.findIndex(tr => tr.id === tradeId);
   if(tIdx < 0) return;
 
-  if(!confirm('Hapus transaksi ini?')) return;
+  if(!confirm('Delete this trade?')) return;
 
   asset.trades.splice(tIdx, 1);
   recalcAssetFromTrades(asset, type);
   saveS(); recalc();
   renderDetailStats(type, S[type][assetIdx]);
   renderDetailTrades();
-  toast('Transaksi dihapus', 'ok');
+  toast('Trade deleted', 'ok');
 }
 
 // ─── OPEN ADD MODAL FROM DETAIL PANEL ───
@@ -1776,20 +1943,20 @@ function renderDetailStats(type, asset){
           <div class="di-val2">${costBase > 0 ? fRp(costBase) : ''}</div></div>
         <div class="di-item"><div class="di-lbl">Cost Base / Unit</div>
           <div class="di-val">${cpuUSD > 0 ? fUSD(cpuUSD) : '—'}</div>
-          <div class="di-val2">${cpuIDR > 0 ? 'IDR '+Math.round(cpuIDR).toLocaleString('id-ID') : ''}</div></div>
+          <div class="di-val2">${cpuIDR > 0 ? 'IDR '+Math.round(cpuIDR).toLocaleString('en-US') : ''}</div></div>
       </div>`;
   } else {
     invEl.innerHTML = `
       <div class="di-ttl">Your Investment</div>
       <div class="di-grid">
         <div class="di-item"><div class="di-lbl">Current Value</div>
-          <div class="di-val">${currentValue > 0 ? 'IDR '+Math.round(currentValue).toLocaleString('id-ID') : '—'}</div></div>
+          <div class="di-val">${currentValue > 0 ? 'IDR '+Math.round(currentValue).toLocaleString('en-US') : '—'}</div></div>
         <div class="di-item"><div class="di-lbl">Total Quantity</div>
-          <div class="di-val">${qty > 0 ? qty.toLocaleString('id-ID')+' lembar' : '—'}</div></div>
+          <div class="di-val">${qty > 0 ? qty.toLocaleString('en-US')+' shares' : '—'}</div></div>
         <div class="di-item"><div class="di-lbl">Cost Base</div>
-          <div class="di-val">${costBase > 0 ? 'IDR '+Math.round(costBase).toLocaleString('id-ID') : '—'}</div></div>
+          <div class="di-val">${costBase > 0 ? 'IDR '+Math.round(costBase).toLocaleString('en-US') : '—'}</div></div>
         <div class="di-item"><div class="di-lbl">Cost Base / Unit</div>
-          <div class="di-val">${costPerUnit > 0 ? 'IDR '+costPerUnit.toLocaleString('id-ID',{minimumFractionDigits:0}) : '—'}</div></div>
+          <div class="di-val">${costPerUnit > 0 ? 'IDR '+costPerUnit.toLocaleString('en-US',{minimumFractionDigits:0}) : '—'}</div></div>
       </div>`;
   }
 }
@@ -1805,7 +1972,7 @@ async function fetchDetailChart(type, asset){
     const data = await r.json();
     const labels = data.map(d => {
       const dt = new Date(d[0]);
-      return `${dt.getDate()} ${dt.toLocaleString('id-ID',{month:'short'})}`;
+      return `${dt.getDate()} ${dt.toLocaleString('en-US',{month:'short'})}`;
     });
     const prices = data.map(d => parseFloat(d[4])); // close price
     return {labels, prices, currency:'USDT'};
@@ -1823,7 +1990,7 @@ async function fetchDetailChart(type, asset){
     const closes     = result.indicators?.quote?.[0]?.close || [];
     const labels = timestamps.map(ts => {
       const dt = new Date(ts * 1000);
-      return `${dt.getDate()} ${dt.toLocaleString('id-ID',{month:'short'})}`;
+      return `${dt.getDate()} ${dt.toLocaleString('en-US',{month:'short'})}`;
     });
     const prices = closes.map(p => p != null ? Math.round(p) : null).filter(p => p !== null);
     return {labels: labels.slice(0, prices.length), prices, currency:'IDR'};
@@ -1874,7 +2041,7 @@ function renderDetailChart(labels, prices, currency){
         tooltip:{
           backgroundColor:'#12162a', borderColor:'#1f2440', borderWidth:1,
           titleColor:'#7a88b0', bodyColor:'#dde3f4',
-          callbacks:{ label: c => (currency === 'USDT' ? fUSD(c.raw) : 'IDR '+Math.round(c.raw).toLocaleString('id-ID')) }
+          callbacks:{ label: c => (currency === 'USDT' ? fUSD(c.raw) : 'IDR '+Math.round(c.raw).toLocaleString('en-US')) }
         }
       },
       scales:{
@@ -1903,12 +2070,16 @@ document.getElementById('themeBtn').addEventListener('click', toggleTheme);
 document.getElementById('refreshBtn').addEventListener('click', () => {
   setBannerStatus('offline','Fetching…');
   fetchUSDTIDR();
-  fetchIDXPrices();
+  if(isIDXMarketOpen()){
+    if(!tvWs || tvWs.readyState > 1) initIDXStream();
+  } else {
+    fetchIDXFallback();
+  }
   if(!wsReady){
     if(wsConn){ try{ wsConn.close(); }catch(e){} }
     initWebSocket();
   }
-  toast('Memperbarui harga…');
+  toast('Updating prices…');
 });
 document.querySelectorAll('.dchip').forEach(c => c.addEventListener('click', function(){
   document.querySelectorAll('.dchip').forEach(x => x.classList.remove('active'));
@@ -1981,9 +2152,17 @@ function initClock(){
   fetchUSDTIDR();
   setInterval(fetchUSDTIDR, 60000);
 
-  // Fetch IDX prices (every 60s)
-  fetchIDXPrices();
-  setInterval(fetchIDXPrices, 60000);
+  // IDX prices — TradingView WS when market open, fallback when closed
+  initIDXStream();
+  // Re-check every 5min (reconnect if market opened, or re-fallback if closed)
+  setInterval(()=>{
+    if(isIDXMarketOpen()){
+      if(!tvWs || tvWs.readyState > 1) initIDXStream();
+    } else {
+      if(tvWs && tvWs.readyState < 2){ tvWs.close(); tvWs = null; }
+      fetchIDXFallback();
+    }
+  }, 300000);
 
   // Update today chart labels every 60s
   setInterval(updateTodayLabels, 60000);
