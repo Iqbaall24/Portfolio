@@ -65,6 +65,9 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-ser
 .nav-item:hover{color:var(--fg);background:var(--bg-hover);}
 .nav-item.active{color:var(--fg);background:var(--bg-hover);}
 .spacer{flex:1;}
+.nav-clock{font-family:'JetBrains Mono','Fira Code',monospace;font-size:12px;color:var(--fg2);
+  padding:4px 10px;background:var(--bg-hover);border:1px solid var(--border);border-radius:6px;
+  white-space:nowrap;letter-spacing:.3px;user-select:none;}
 .btn{display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border-radius:7px;font-size:13px;
   font-weight:500;cursor:pointer;border:1px solid var(--border);background:var(--bg-hover);color:var(--fg);
   font-family:inherit;transition:.15s;white-space:nowrap;text-decoration:none;}
@@ -216,6 +219,7 @@ td:first-child{text-align:left;}
   <button class="nav-item">Analytics</button>
   <button class="nav-item">Reports</button>
   <div class="spacer"></div>
+  <span id="navClock" class="nav-clock">00:00:00 WIB</span>
   <button class="btn" id="themeBtn" title="Toggle theme">🌙</button>
   <a class="btn" href="https://www.tradingview.com/chart/?symbol=BINANCE%3ABTCUSDT" target="_blank" rel="noopener">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
@@ -256,20 +260,13 @@ td:first-child{text-align:left;}
         <span style="font-size:11px;color:var(--fg3);">pergerakan hari ini</span>
       </div>
     </div>
-    <div class="pf-assets" id="pfAssets">
-      <!-- filled by JS -->
-    </div>
     <div class="pf-meta">
       <div class="spill offline" id="pStatus">
         <span class="dot" id="sDot"></span>
         <span id="sText">Loading…</span>
       </div>
       <div class="pf-ts" id="pfTs">—</div>
-      <div class="rate-row">
-        <span>USDT/IDR</span>
-        <input class="e-sm" id="rateInput" type="number" value="16200" title="Set USDT/IDR rate manual">
-        <button class="btn" id="rateBtn" style="padding:4px 10px;font-size:12px;">Set</button>
-      </div>
+      <div class="pf-ts" id="pfUSDTIDR" style="color:var(--fg2);">USDT/IDR —</div>
     </div>
   </div>
 
@@ -488,101 +485,112 @@ function loadS(){
 }
 function saveS(){ try{localStorage.setItem(SK,JSON.stringify(S));}catch(e){} }
 
-// ─── FETCH ALL PRICES (Binance + CoinGecko fallback) ───
-async function fetchAllPrices(){
-  setBannerStatus('offline','Fetching…');
-
-  const symbols = ['BTCUSDT','ETHUSDT','SOLUSDT','XRPUSDT'];
-  let binancePrices = null;
-  let newUSDTIDR = null;
-  let priceSource = 'offline';
-
-  // 1. Try Binance batch — all USDT pairs
-  try{
-    const q = encodeURIComponent(JSON.stringify(symbols));
-    const r = await fetch(
-      `https://api.binance.com/api/v3/ticker/price?symbols=${q}`,
-      {signal: AbortSignal.timeout(8000)});
-    if(r.ok){
-      const data = await r.json();
-      binancePrices = {};
-      data.forEach(d => {
-        const sym = d.symbol.replace('USDT','');
-        binancePrices[sym] = parseFloat(d.price);
-      });
-      priceSource = 'live';
-    }
-  }catch(e){}
-
-  // 2. Try CoinGecko for USDT/IDR rate (Binance doesn't have USDTIDR spot)
+// ─── FETCH USDT/IDR RATE (CoinGecko, auto every 60s) ───
+async function fetchUSDTIDR(){
   try{
     const r = await fetch(
       'https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=idr',
       {signal: AbortSignal.timeout(8000)});
     if(r.ok){
       const d = await r.json();
-      if(d.tether && d.tether.idr) newUSDTIDR = d.tether.idr;
+      if(d.tether && d.tether.idr){
+        usdtIDR = d.tether.idr;
+        S.lastUSDTIDR = usdtIDR;
+        S.usdIdrRate = usdtIDR;
+        saveS();
+        updateBanner();
+        recalc();
+      }
     }
   }catch(e){}
+}
 
-  // 3. If Binance failed, try CoinGecko for BTC/ETH/SOL/XRP too
-  if(!binancePrices){
+// ─── BINANCE WEBSOCKET (per-second ticks) ───
+let wsConn = null;
+let wsReady = false;
+function initWebSocket(){
+  // Fallback: also fetch via REST once on startup so we have prices immediately
+  (async ()=>{
+    setBannerStatus('offline','Connecting…');
     try{
-      const r = await fetch(
-        'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,ripple&vs_currencies=usd',
+      const symbols = ['BTCUSDT','ETHUSDT','SOLUSDT','XRPUSDT'];
+      const q = encodeURIComponent(JSON.stringify(symbols));
+      const r = await fetch(`https://api.binance.com/api/v3/ticker/price?symbols=${q}`,
         {signal: AbortSignal.timeout(8000)});
       if(r.ok){
-        const d = await r.json();
-        binancePrices = {};
-        if(d.bitcoin) binancePrices.BTC = d.bitcoin.usd;
-        if(d.ethereum) binancePrices.ETH = d.ethereum.usd;
-        if(d.solana) binancePrices.SOL = d.solana.usd;
-        if(d.ripple) binancePrices.XRP = d.ripple.usd;
-        priceSource = binancePrices.BTC ? 'live' : 'offline';
+        const data = await r.json();
+        data.forEach(d => {
+          const sym = d.symbol.replace('USDT','');
+          const p = parseFloat(d.price);
+          if(!isNaN(p) && p > 0) livePrices[sym] = p;
+        });
+        livePrices.USDT = 1.0;
+        btcUSD = livePrices.BTC || btcUSD;
+        btcIDR = Math.round(btcUSD * usdtIDR);
+        S.lastLivePrices = {...livePrices};
+        S.lastBtcUSD = btcUSD;
+        S.lastBtcIDR = btcIDR;
+        S.lastBtcTime = new Date().toISOString();
+        saveS();
+        updateBanner();
+        recalc();
       }
     }catch(e){}
+  })();
+
+  const streams = 'btcusdt@miniTicker/ethusdt@miniTicker/solusdt@miniTicker/xrpusdt@miniTicker';
+  const wsURL = `wss://stream.binance.com:9443/stream?streams=${streams}`;
+
+  function connect(){
+    try{
+      wsConn = new WebSocket(wsURL);
+    }catch(e){
+      setBannerStatus('cached','WS N/A');
+      return;
+    }
+
+    wsConn.onopen = () => {
+      wsReady = true;
+      setBannerStatus('live','LIVE');
+    };
+
+    wsConn.onmessage = (evt) => {
+      try{
+        const msg = JSON.parse(evt.data);
+        const d = msg.data;
+        if(!d || !d.s || !d.c) return;
+        const sym = d.s.replace('USDT','');
+        const price = parseFloat(d.c);
+        if(isNaN(price) || price <= 0) return;
+        livePrices[sym] = price;
+        if(sym === 'BTC'){
+          btcUSD = price;
+          btcIDR = Math.round(price * usdtIDR);
+          S.lastBtcUSD = price;
+          S.lastBtcIDR = btcIDR;
+          S.lastBtcTime = new Date().toISOString();
+        }
+        S.lastLivePrices = {...livePrices};
+        // Save periodically (not every tick to avoid LocalStorage thrash)
+        if(Math.random() < 0.05) saveS();
+        updateBanner();
+        recalc();
+      }catch(e){}
+    };
+
+    wsConn.onerror = () => {
+      wsReady = false;
+      setBannerStatus('cached','WS Error');
+    };
+
+    wsConn.onclose = () => {
+      wsReady = false;
+      setBannerStatus('cached','Reconnecting…');
+      setTimeout(connect, 5000);
+    };
   }
 
-  // 4. Update live prices
-  if(binancePrices){
-    if(binancePrices.BTC) livePrices.BTC = binancePrices.BTC;
-    if(binancePrices.ETH) livePrices.ETH = binancePrices.ETH;
-    if(binancePrices.SOL) livePrices.SOL = binancePrices.SOL;
-    if(binancePrices.XRP) livePrices.XRP = binancePrices.XRP;
-    livePrices.USDT = 1.0;
-  }
-
-  // 5. Update USDT/IDR rate
-  if(newUSDTIDR){
-    usdtIDR = newUSDTIDR;
-  } else {
-    // Use manual rate from state
-    usdtIDR = S.usdIdrRate || DEF.usdIdrRate;
-  }
-
-  // 6. Derived BTC values for compatibility
-  btcUSD = livePrices.BTC || DEF.lastBtcUSD;
-  btcIDR = Math.round(btcUSD * usdtIDR);
-
-  // 7. Fallback to cached if nothing worked
-  if(priceSource === 'offline' && S.lastLivePrices && S.lastLivePrices.BTC){
-    livePrices = {...S.lastLivePrices};
-    btcUSD = livePrices.BTC;
-    btcIDR = Math.round(btcUSD * usdtIDR);
-    priceSource = 'cached';
-  }
-
-  // 8. Persist to localStorage
-  S.lastLivePrices = {...livePrices};
-  S.lastUSDTIDR = usdtIDR;
-  S.lastBtcIDR = btcIDR;
-  S.lastBtcUSD = btcUSD;
-  S.lastBtcTime = new Date().toISOString();
-  saveS();
-
-  setBannerStatus(priceSource, {live:'LIVE', cached:'CACHED', offline:'OFFLINE'}[priceSource]);
-  updateBanner();
-  recalc();
+  connect();
 }
 
 // ─── BANNER STATUS ───
@@ -621,24 +629,12 @@ function updateBanner(){
 
   // Timestamp
   document.getElementById('pfTs').textContent = S.lastBtcTime
-    ? 'Updated ' + new Date(S.lastBtcTime).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})
+    ? 'Updated ' + new Date(S.lastBtcTime).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'})
     : '—';
 
-  // Per-asset mini icons (active only)
-  const activeCryptos = S.crypto.filter(a => a.active && a.qty > 0);
-  const html = activeCryptos.map(a => {
-    const usd = a.symbol === 'USDT' ? 1.0 : (livePrices[a.symbol] || 0);
-    let priceStr;
-    if(usd >= 1000) priceStr = '$' + (usd/1000).toFixed(1) + 'K';
-    else if(usd >= 1) priceStr = '$' + usd.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-    else priceStr = '$' + usd.toFixed(4);
-    return `<div class="pf-asset-item">
-      <div class="pf-aico" style="background:${a.color}">${a.symbol.slice(0,2)}</div>
-      <div class="pf-asym">${a.symbol}</div>
-      <div class="pf-aprice">${priceStr}</div>
-    </div>`;
-  }).join('');
-  document.getElementById('pfAssets').innerHTML = html || `<span style="font-size:12px;color:var(--fg3);">Tidak ada posisi aktif</span>`;
+  // USDT/IDR live rate display
+  const rateEl = document.getElementById('pfUSDTIDR');
+  if(rateEl) rateEl.textContent = `USDT/IDR ${Math.round(usdtIDR).toLocaleString('id-ID')}`;
 }
 
 // ─── FORMAT ───
@@ -768,16 +764,26 @@ function renderTables(){
           </div>
         </div></td>
         <td><input class="e-input" data-t="crypto" data-i="${i}" data-f="avgBuyUSDT" value="${avgBuyUSDT||0}" type="number" placeholder="USDT avg buy"></td>
-        <td class="mono" style="color:var(--fg2);">${a.active && usdPrice > 0 ? priceUSD : '—'}</td>
+        <td class="mono" style="color:var(--fg2);">${usdPrice > 0 ? priceUSD : '—'}</td>
         <td><input class="e-input" data-t="crypto" data-i="${i}" data-f="qty" value="${a.qty}" type="number" step="0.00000001"></td>
         <td class="mono">${a.active && valIDR > 0 ? fIDR(valIDR) : '<span class="closed">CLOSED</span>'}</td>
         <td><input class="e-input" data-t="crypto" data-i="${i}" data-f="retPct" value="${retPct.toFixed(2)}" type="number" step="0.01" style="width:80px;"></td>
       </tr>`;
     } else {
-      const avgBuyDisplay = avgBuyIDR_live > 0
+      // Avg buy: USDT on top (bold), IDR below (muted)
+      const avgBuyDisplay = avgBuyUSDT > 0
         ? `<div class="td-avg">
-            <div class="mono">${'IDR ' + Math.round(avgBuyIDR_live).toLocaleString('id-ID')}</div>
-            <div class="sub">${avgBuyUSDT ? fUSD(avgBuyUSDT) : '—'}</div>
+            <div class="mono">${fUSD(avgBuyUSDT)}</div>
+            <div class="sub">${'IDR ' + Math.round(avgBuyIDR_live).toLocaleString('id-ID')}</div>
+           </div>`
+        : '<span style="color:var(--fg3);">—</span>';
+
+      // Price: show for ALL assets (not just active), USDT on top + IDR below
+      const priceIDR_live = usdPrice > 0 ? usdPrice * usdtIDR : 0;
+      const priceDisplay = usdPrice > 0
+        ? `<div class="td-avg">
+            <div class="mono">${fUSD(usdPrice)}</div>
+            <div class="sub">${'IDR ' + Math.round(priceIDR_live).toLocaleString('id-ID')}</div>
            </div>`
         : '<span style="color:var(--fg3);">—</span>';
 
@@ -791,7 +797,7 @@ function renderTables(){
           </div>
         </div></td>
         <td>${a.avgBuy || avgBuyUSDT ? avgBuyDisplay : '<span style="color:var(--fg3);">—</span>'}</td>
-        <td class="mono">${a.active && usdPrice > 0 ? priceUSD : '<span style="color:var(--fg3);">—</span>'}</td>
+        <td>${priceDisplay}</td>
         <td class="mono">${a.qty ? fQty(a.qty, a.symbol) : '<span class="closed">CLOSED</span>'}</td>
         <td class="mono">${a.active && valIDR > 0 ? fIDR(valIDR) : '<span style="color:var(--fg3);">—</span>'}</td>
         <td><span class="rpill ${rc}">${fPct(retPct)}</span></td>
@@ -998,24 +1004,45 @@ document.getElementById('refreshBtn').addEventListener('click', () => {
   fetchAllPrices();
   toast('Memperbarui harga…');
 });
-document.getElementById('rateBtn').addEventListener('click', () => {
-  const v = parseFloat(document.getElementById('rateInput').value);
-  if(!isNaN(v) && v > 1000){
-    S.usdIdrRate = v;
-    usdtIDR = v;
-    S.lastUSDTIDR = v;
-    btcIDR = Math.round(btcUSD * v);
-    saveS();
-    updateBanner();
-    recalc();
-    toast('Rate USDT/IDR diperbarui');
-  }
-});
 document.querySelectorAll('.dchip').forEach(c => c.addEventListener('click', function(){
   document.querySelectorAll('.dchip').forEach(x => x.classList.remove('active'));
   this.classList.add('active');
   switchPeriod(this.dataset.p);
 }));
+
+// ─── CLOCK (auto-timezone WIT/WITA/WIB) ───
+function initClock(){
+  const tzMap = {
+    'Asia/Jayapura': 'WIT',
+    'Asia/Biak': 'WIT',
+    'Pacific/Port_Moresby': 'WIT',
+    'Asia/Makassar': 'WITA',
+    'Asia/Ujung_Pandang': 'WITA',
+    'Asia/Bali': 'WITA',
+    'Asia/Lombok': 'WITA',
+  };
+  // Detect timezone label
+  let tzLabel = 'WIB';
+  try{
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if(tzMap[tz]) tzLabel = tzMap[tz];
+    else if(tz && tz.includes('Jayapura')) tzLabel = 'WIT';
+    else if(tz && tz.includes('Makassar')) tzLabel = 'WITA';
+  }catch(e){}
+
+  function tick(){
+    try{
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2,'0');
+      const mm = String(now.getMinutes()).padStart(2,'0');
+      const ss = String(now.getSeconds()).padStart(2,'0');
+      const el = document.getElementById('navClock');
+      if(el) el.textContent = `${hh}:${mm}:${ss} ${tzLabel}`;
+    }catch(e){}
+  }
+  tick();
+  setInterval(tick, 1000);
+}
 
 // ─── INIT ───
 (function init(){
@@ -1027,16 +1054,20 @@ document.querySelectorAll('.dchip').forEach(c => c.addEventListener('click', fun
     }
   }catch(e){}
 
-  document.getElementById('rateInput').value = S.usdIdrRate || DEF.usdIdrRate;
-
   // Show cached data immediately
   updateBanner();
   initChart();
   recalc();
   switchPeriod(activePeriod); // set initial % change
 
-  // Fetch live prices
-  fetchAllPrices();
-  setInterval(fetchAllPrices, 60000);
+  // Start clock
+  initClock();
+
+  // Fetch USDT/IDR rate (auto every 60s)
+  fetchUSDTIDR();
+  setInterval(fetchUSDTIDR, 60000);
+
+  // Start Binance WebSocket for per-second price ticks
+  initWebSocket();
 })();
 </script>
