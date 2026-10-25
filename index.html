@@ -964,6 +964,11 @@ const IDX_TV = {
   BMRI:'IDX:BMRI', BBNI:'IDX:BBNI',
   IPCC:'IDX:IPCC', IHSG:'IDX:COMPOSITE'
 };
+// Crypto symbols via TradingView (Binance) — ensures % matches TradingView UI exactly
+const CRYPTO_TV = {
+  BTC:'BINANCE:BTCUSDT', ETH:'BINANCE:ETHUSDT',
+  SOL:'BINANCE:SOLUSDT', XRP:'BINANCE:XRPUSDT'
+};
 
 function isIDXMarketOpen(){
   const now = new Date();
@@ -1004,7 +1009,7 @@ function initIDXStream(){
     tvWs.send(tvEncode({m:'quote_create_session', p:[tvSession]}));
     // Include market_cap_basic for market cap column
     tvWs.send(tvEncode({m:'quote_set_fields', p:[tvSession,'lp','ch','chp','market_cap_basic']}));
-    const syms = Object.values(IDX_TV);
+    const syms = [...Object.values(IDX_TV), ...Object.values(CRYPTO_TV)];
     tvWs.send(tvEncode({m:'quote_add_symbols', p:[tvSession, ...syms]}));
     setIDXStatus(isIDXMarketOpen() ? 'Indonesian Stocks · Live · TradingView' : 'IDX Closed · Last Price · TradingView');
   };
@@ -1037,10 +1042,28 @@ function initIDXStream(){
           const tvSym = data.n;
           const v = data.v || {};
           const localSym = Object.entries(IDX_TV).find(([,tv])=>tv===tvSym)?.[0];
-          if(!localSym) continue;
-          if(v.lp && v.lp > 0) idxPrices[localSym] = Math.round(v.lp);
-          if(v.chp !== undefined) idxChanges[localSym] = {pct: v.chp, amt: Math.round(v.ch||0)};
-          if(v.market_cap_basic && v.market_cap_basic > 0) idxMarketCaps[localSym] = v.market_cap_basic;
+          const cryptoSym = Object.entries(CRYPTO_TV).find(([,tv])=>tv===tvSym)?.[0];
+          if(localSym){
+            if(v.lp && v.lp > 0) idxPrices[localSym] = Math.round(v.lp);
+            if(v.chp !== undefined) idxChanges[localSym] = {pct: v.chp, amt: Math.round(v.ch||0)};
+            if(v.market_cap_basic && v.market_cap_basic > 0) idxMarketCaps[localSym] = v.market_cap_basic;
+          } else if(cryptoSym){
+            // Override Binance WS with TradingView data so % matches TradingView UI exactly
+            if(v.lp && v.lp > 0){
+              livePrices[cryptoSym] = v.lp;
+              if(cryptoSym === 'BTC'){
+                btcUSD = v.lp;
+                btcIDR = Math.round(v.lp * usdtIDR);
+                S.lastBtcUSD = v.lp;
+                S.lastBtcIDR = btcIDR;
+                S.lastBtcTime = new Date().toISOString();
+              }
+              S.lastLivePrices = {...livePrices};
+            }
+            if(v.chp !== undefined) livePriceChanges[cryptoSym] = v.chp;
+            updateBanner();
+            recalc();
+          } else { continue; }
         }
       }catch(e){}
     }
@@ -1054,6 +1077,38 @@ function initIDXStream(){
   };
 
   tvWs.onerror = ()=>{ try{ tvWs.close(); }catch(e){} };
+}
+
+// ─── STOOQ FALLBACK FOR IDX PRICES ───
+// Fires once if TradingView WS hasn't delivered IDX prices after 12s
+async function fetchIDXFallback(){
+  const allZero = Object.entries(idxPrices).every(([,v])=>v===0);
+  if(!allZero) return; // TradingView already populated, skip
+  const now = new Date();
+  const d2 = now.toISOString().slice(0,10).replace(/-/g,'');
+  const past = new Date(now.getTime() - 10*86400000);
+  const d1 = past.toISOString().slice(0,10).replace(/-/g,'');
+  const syms = Object.keys(IDX_TV).filter(s => s !== 'IHSG');
+  let updated = false;
+  await Promise.allSettled(syms.map(async sym => {
+    try{
+      const r = await fetch(
+        `https://stooq.com/q/d/l/?s=${sym.toLowerCase()}.id&d1=${d1}&d2=${d2}&i=d`,
+        {signal: AbortSignal.timeout(6000)}
+      );
+      if(!r.ok) return;
+      const csv = await r.text();
+      const lines = csv.trim().split('\n').filter(l => l && !l.startsWith('Date'));
+      if(!lines.length) return;
+      const parts = lines[lines.length-1].split(',');
+      const close = parseFloat(parts[4]); // Close column
+      if(!isNaN(close) && close > 0 && idxPrices[sym] === 0){
+        idxPrices[sym] = Math.round(close);
+        updated = true;
+      }
+    }catch(e){}
+  }));
+  if(updated){ setIDXStatus('IDX · Last Close · Stooq'); renderTables(); }
 }
 
 // ─── BINANCE WEBSOCKET ───
@@ -1161,18 +1216,26 @@ function updateBanner(){
     el.textContent = '$0.00';
   }
 
-  // 24h change: use stored today-start value; if no trades yet show —
-  const todayStart = S._todayStart || 0;
+  // 24h portfolio change: weighted average of each asset's TradingView chp
+  let tw24h = 0, wt24h = 0;
+  S.crypto.forEach(a => {
+    if(a.active && a.qty > 0 && a.symbol !== 'USDT'){
+      const usd = livePrices[a.symbol] || 0;
+      const val = a.qty * usd;
+      const chg = livePriceChanges[a.symbol];
+      if(val > 0 && chg !== undefined){ tw24h += val * chg; wt24h += val; }
+    }
+  });
+  const portfolio24h = wt24h > 0 ? tw24h / wt24h : null;
   const pf24h = document.getElementById('pf24hPill');
-  if(totalIDR === 0 || todayStart === 0){
+  if(totalUSDT === 0 || portfolio24h === null){
     pf24h.className = 'rpill offline';
     pf24h.innerHTML = '— 24h';
   } else {
-    const change24h = (totalIDR - todayStart) / todayStart * 100;
-    const change24hAmt = totalIDR - todayStart;
-    pf24h.className = 'rpill ' + (change24h >= 0 ? 'pos' : 'neg');
-    const sign = change24h >= 0 ? '+' : '';
-    pf24h.innerHTML = `${sign}${change24h.toFixed(2)}% &nbsp;<span style="font-weight:400;opacity:.8;">(${change24hAmt >= 0 ? '+' : '-'}${fRp(Math.abs(change24hAmt))})</span> 24h`;
+    const change24hAmt = totalUSDT * (portfolio24h / 100) * usdtIDR;
+    pf24h.className = 'rpill ' + (portfolio24h >= 0 ? 'pos' : 'neg');
+    const sign = portfolio24h >= 0 ? '+' : '';
+    pf24h.innerHTML = `${sign}${portfolio24h.toFixed(2)}% &nbsp;<span style="font-weight:400;opacity:.8;">(${change24hAmt >= 0 ? '+' : '-'}${fRp(Math.abs(change24hAmt))})</span> 24h`;
   }
 
   document.getElementById('pfTs').textContent = S.lastBtcTime
@@ -1251,6 +1314,31 @@ function recalc(){
 function updateChartPct(vals, totalIDR){
   const el = document.getElementById('chartChangePct');
   if(!el) return;
+
+  // For "Today" period: if only one meaningful data point exists,
+  // use the portfolio's weighted 24h change from TradingView (matches banner)
+  if(activePeriod === 'today'){
+    const nonZero = vals ? vals.filter(v => v > 0) : [];
+    if(nonZero.length <= 1){
+      // Calculate weighted 24h from livePriceChanges
+      let tw24h = 0, wt24h = 0;
+      S.crypto.forEach(a => {
+        if(a.active && a.qty > 0 && a.symbol !== 'USDT'){
+          const usd = livePrices[a.symbol] || 0;
+          const val = a.qty * usd;
+          const chg = livePriceChanges[a.symbol];
+          if(val > 0 && chg !== undefined){ tw24h += val * chg; wt24h += val; }
+        }
+      });
+      if(wt24h > 0){
+        const pct24h = tw24h / wt24h;
+        el.textContent = (pct24h >= 0 ? '+' : '') + pct24h.toFixed(2) + '%';
+        el.className = 'chart-change ' + (pct24h >= 0 ? 'pos' : 'neg');
+        return;
+      }
+    }
+  }
+
   if(!vals || vals.length < 2 || (totalIDR === 0)){
     el.textContent = '—';
     el.className = 'chart-change';
@@ -1313,7 +1401,7 @@ function renderTables(){
     return `<div class="aicon-wrap">
       <img class="alogo" src="${logoUrl}" alt="${sym}"
         onerror="this.hidden=true;this.nextElementSibling.hidden=false;">
-      <div class="aicon-fb aicon" style="background:${color};display:none;">${sym.slice(0,2)}</div>
+      <div class="aicon-fb aicon" style="background:${color}" hidden>${sym.slice(0,2)}</div>
     </div>`;
   }
 
@@ -1523,7 +1611,7 @@ function switchPeriod(p){
 
   document.getElementById('dateRange').textContent = pd.range;
   document.getElementById('chartSub').textContent = pd.sub;
-  updateChartPct(vals);
+  updateChartPct(vals, totalIDR);
 }
 
 // ─── NOW LINE PLUGIN (TradingView-style) ───
@@ -2644,7 +2732,9 @@ function initClock(){
 
   // IDX prices — always use TradingView WS (lp = last close, works 24/7)
   initIDXStream();
-  // Re-check every 5min — reconnect if WS dropped (no Yahoo Finance fallback)
+  // Stooq fallback: if TradingView WS hasn't delivered prices after 12s, use Stooq REST
+  setTimeout(fetchIDXFallback, 12000);
+  // Re-check every 5min — reconnect if WS dropped
   setInterval(()=>{
     if(!tvWs || tvWs.readyState > 1) initIDXStream();
   }, 300000);
