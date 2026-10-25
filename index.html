@@ -544,7 +544,7 @@ td:first-child{text-align:left;}
       <canvas id="pfChart"></canvas>
     </div>
     <div class="chart-clock-bar">
-      <span class="chart-clock"><span id="witClock">—:—:—</span><span class="tz-lbl">WIT</span></span>
+      <span class="chart-clock"><span id="witClock">—:—:—</span><span class="tz-lbl">UTC</span></span>
     </div>
   </div>
 
@@ -854,6 +854,7 @@ let idxChanges = {};
 let idxMarketCaps = {};
 let cryptoMarketCaps = {};
 let cryptoLogos = {};
+let livePriceChanges = {}; // 24h % change per symbol (from Binance)
 
 // Modal state
 let modalState = {
@@ -1065,14 +1066,16 @@ function initWebSocket(){
     try{
       const symbols = ['BTCUSDT','ETHUSDT','SOLUSDT','XRPUSDT'];
       const q = encodeURIComponent(JSON.stringify(symbols));
-      const r = await fetch(`https://api.binance.com/api/v3/ticker/price?symbols=${q}`,
+      const r = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbols=${q}`,
         {signal: AbortSignal.timeout(8000)});
       if(r.ok){
         const data = await r.json();
         data.forEach(d => {
           const sym = d.symbol.replace('USDT','');
-          const p = parseFloat(d.price);
+          const p = parseFloat(d.lastPrice);
           if(!isNaN(p) && p > 0) livePrices[sym] = p;
+          const chg = parseFloat(d.priceChangePercent);
+          if(!isNaN(chg)) livePriceChanges[sym] = chg;
         });
         livePrices.USDT = 1.0;
         btcUSD = livePrices.BTC || btcUSD;
@@ -1086,7 +1089,7 @@ function initWebSocket(){
     }catch(e){}
   })();
 
-  const streams = 'btcusdt@miniTicker/ethusdt@miniTicker/solusdt@miniTicker/xrpusdt@miniTicker';
+  const streams = 'btcusdt@ticker/ethusdt@ticker/solusdt@ticker/xrpusdt@ticker';
   const wsURL = `wss://stream.binance.com:9443/stream?streams=${streams}`;
 
   function connect(){
@@ -1104,6 +1107,9 @@ function initWebSocket(){
         const price = parseFloat(d.c);
         if(isNaN(price) || price <= 0) return;
         livePrices[sym] = price;
+        // Store 24h % change (ticker stream field P)
+        const chgPct = parseFloat(d.P);
+        if(!isNaN(chgPct)) livePriceChanges[sym] = chgPct;
         if(sym === 'BTC'){
           btcUSD = price;
           btcIDR = Math.round(price * usdtIDR);
@@ -1302,7 +1308,7 @@ function renderTables(){
   // Helper: asset logo cell
   function logoCell(type, sym, color){
     const logoUrl = type === 'crypto'
-      ? `https://s3-symbol-logo.tradingview.com/crypto/XTVC${sym}--small.svg`
+      ? (cryptoLogos[sym] || `https://s3-symbol-logo.tradingview.com/crypto/XTVC${sym}--small.svg`)
       : `https://s3-symbol-logo.tradingview.com/${sym.toLowerCase()}--small.svg`;
     return `<div class="aicon-wrap">
       <img class="alogo" src="${logoUrl}" alt="${sym}"
@@ -1341,7 +1347,7 @@ function renderTables(){
     if(retPct !== null){ cryptoRetTotal += retPct; cryptoRetCount++; }
 
     // 24h change pill
-    const chgPct = a.symbol === 'USDT' ? 0 : null; // livePrices don't carry chg% yet
+    const chgPct = a.symbol === 'USDT' ? 0 : (livePriceChanges[a.symbol] !== undefined ? livePriceChanges[a.symbol] : null);
     const chgPill = chgPct !== null
       ? `<span class="chg-pill ${chgPct >= 0 ? 'pos' : 'neg'}">${chgPct >= 0 ? '+' : ''}${chgPct.toFixed(2)}%</span>`
       : '<span class="chg-pill neu">—</span>';
@@ -2316,46 +2322,107 @@ async function fetchDetailChart(type, asset, firstDate){
   }
 }
 
-// ─── AI PRICE ANALYSIS via TradingView Scanner ───
+// ─── AI PRICE ANALYSIS — local RSI / MACD / EMA (no CORS dependency) ───
 async function fetchTVAnalysis(type, asset){
   const aiSection = document.getElementById('dAISection');
   const aiContent = document.getElementById('dAIContent');
   if(!aiSection || !aiContent) return;
+  if(type === 'crypto' && asset.symbol === 'USDT'){ aiSection.hidden = true; return; }
 
   aiSection.hidden = false;
   aiContent.innerHTML = '<div style="color:var(--fg3);font-size:12px;padding:8px 0;">Loading analysis…</div>';
 
   try{
-    let url, tvSym;
-    if(type === 'idx'){
-      const mapped = IDX_TV[asset.symbol];
-      if(!mapped) throw new Error('No symbol');
-      tvSym = mapped; // e.g. "IDX:BBCA"
-      url = 'https://scanner.tradingview.com/indonesia/scan';
+    let closes = [];
+
+    if(type === 'crypto'){
+      const sym = asset.symbol;
+      const r = await fetch(
+        `https://api.binance.com/api/v3/klines?symbol=${sym}USDT&interval=1d&limit=60`,
+        { signal: AbortSignal.timeout(10000) }
+      );
+      if(!r.ok) throw new Error('Binance klines failed');
+      const data = await r.json();
+      closes = data.map(k => parseFloat(k[4])); // index 4 = daily close
     } else {
-      if(asset.symbol === 'USDT'){ aiSection.hidden = true; return; }
-      tvSym = `BINANCE:${asset.symbol}USDT`;
-      url = 'https://scanner.tradingview.com/crypto/scan';
+      const mapped = IDX_TV[asset.symbol];
+      if(!mapped) throw new Error('No symbol mapping');
+      const sym = asset.symbol.toLowerCase();
+      const now2 = new Date();
+      const d2 = now2.toISOString().slice(0,10).replace(/-/g,'');
+      const past = new Date(now2.getTime() - 100*86400000);
+      const d1 = past.toISOString().slice(0,10).replace(/-/g,'');
+      const r = await fetch(
+        `https://stooq.com/q/d/l/?s=${sym}.id&d1=${d1}&d2=${d2}&i=d`,
+        { signal: AbortSignal.timeout(10000) }
+      );
+      if(!r.ok) throw new Error('Stooq failed');
+      const csv = await r.text();
+      const lines = csv.trim().split('\n').slice(1);
+      closes = lines.map(l => parseFloat(l.split(',')[4])).filter(v => !isNaN(v));
     }
 
-    const payload = {
-      symbols:{ tickers:[tvSym] },
-      columns:['Recommend.All','Recommend.MA','Recommend.Other',
-               'RSI','MACD.macd','MACD.signal','EMA20','EMA50','close']
-    };
+    if(closes.length < 30) throw new Error('Insufficient data');
 
-    const r = await fetch(url, {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(10000)
-    });
-    if(!r.ok) throw new Error('Scanner error');
-    const data = await r.json();
-    const row = data?.data?.[0]?.d;
-    if(!row) throw new Error('No data');
+    // ── Indicator helpers ──
+    function calcEMA(prices, period){
+      if(prices.length < period) return prices[prices.length-1];
+      const k = 2 / (period + 1);
+      let ema = prices.slice(0, period).reduce((a,b)=>a+b,0) / period;
+      for(let i = period; i < prices.length; i++) ema = prices[i]*k + ema*(1-k);
+      return ema;
+    }
 
-    const [recAll, recMA, recOsc, rsi, macd, macdSig, ema20, ema50, close] = row;
+    function calcRSI(prices, period=14){
+      if(prices.length < period+1) return null;
+      const slice = prices.slice(-(period+1));
+      let gains=0, losses=0;
+      for(let i=1; i<slice.length; i++){
+        const d = slice[i] - slice[i-1];
+        if(d > 0) gains += d; else losses -= d;
+      }
+      const avgG = gains/period, avgL = losses/period;
+      if(avgL === 0) return 100;
+      return 100 - 100/(1 + avgG/avgL);
+    }
+
+    function calcMACD(prices, fast=12, slow=26, sig=9){
+      function emaArr(p, n){
+        const k=2/(n+1);
+        let e = p.slice(0,n).reduce((a,b)=>a+b,0)/n;
+        const arr=[e];
+        for(let i=n;i<p.length;i++){ e=p[i]*k+e*(1-k); arr.push(e); }
+        return arr;
+      }
+      const fArr = emaArr(prices, fast);
+      const sArr = emaArr(prices, slow);
+      const minLen = Math.min(fArr.length, sArr.length);
+      const macdLine = Array.from({length:minLen},(_,i)=>fArr[fArr.length-minLen+i]-sArr[sArr.length-minLen+i]);
+      const sigArr = emaArr(macdLine, sig);
+      return { macd: macdLine[macdLine.length-1], signal: sigArr[sigArr.length-1] };
+    }
+
+    const close  = closes[closes.length-1];
+    const rsi    = calcRSI(closes, 14);
+    const macdR  = calcMACD(closes, 12, 26, 9);
+    const ema20  = calcEMA(closes, 20);
+    const ema50  = calcEMA(closes, 50);
+    const macd   = macdR.macd;
+    const macdSig= macdR.signal;
+
+    // ── Scoring: +1 bullish, -1 bearish, 0 neutral ──
+    const maScores = [
+      close > ema20 ? 1 : -1,
+      close > ema50 ? 1 : -1
+    ];
+    const oscScores = [];
+    if(rsi != null) oscScores.push(rsi < 30 ? 1 : rsi > 70 ? -1 : 0);
+    if(macd != null) oscScores.push(macd > macdSig ? 1 : -1);
+
+    const avg = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0;
+    const maRec  = avg(maScores);
+    const oscRec = avg(oscScores);
+    const recAll = avg([...maScores, ...oscScores]);
 
     function recLabel(v){
       if(v == null) return {txt:'N/A', cls:'neutral'};
@@ -2367,10 +2434,10 @@ async function fetchTVAnalysis(type, asset){
     }
 
     const overall  = recLabel(recAll);
-    const maLbl    = recLabel(recMA);
-    const oscLbl   = recLabel(recOsc);
-    const rsiCls   = rsi  >= 70 ? 'neg' : rsi  <= 30 ? 'pos' : 'neu';
-    const macdCls  = macd >  macdSig ? 'pos' : 'neg';
+    const maLbl    = recLabel(maRec);
+    const oscLbl   = recLabel(oscRec);
+    const rsiCls   = rsi  != null ? (rsi  >= 70 ? 'neg' : rsi  <= 30 ? 'pos' : 'neu') : 'neu';
+    const macdCls  = macd != null ? (macd >  macdSig ? 'pos' : 'neg') : 'neu';
     const ema20Cls = close > ema20 ? 'pos' : 'neg';
     const ema50Cls = close > ema50 ? 'pos' : 'neg';
 
@@ -2378,10 +2445,18 @@ async function fetchTVAnalysis(type, asset){
       ? fUSD(v||0)
       : 'IDR '+(Math.round(v||0)).toLocaleString('en-US');
 
+    const macdFmt = v => {
+      if(v == null) return '—';
+      const abs = Math.abs(v);
+      const sign = v >= 0 ? '+' : '-';
+      if(type === 'crypto') return sign + fUSD(abs);
+      return sign + 'IDR ' + Math.round(abs).toLocaleString('en-US');
+    };
+
     aiContent.innerHTML = `
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
         <span class="ai-rec-badge ${overall.cls}">${overall.txt}</span>
-        <span style="color:var(--fg2);font-size:12px;">Overall signal · TradingView</span>
+        <span style="color:var(--fg2);font-size:12px;">Overall signal · Daily (60d)</span>
       </div>
       <div class="ai-grid">
         <div class="ai-item">
@@ -2390,15 +2465,15 @@ async function fetchTVAnalysis(type, asset){
         </div>
         <div class="ai-item">
           <div class="ai-item-lbl">MACD</div>
-          <div class="ai-item-val ${macdCls}">${macd!=null?(macd>=0?'+':'')+macd.toFixed(4):'—'}</div>
+          <div class="ai-item-val ${macdCls}">${macdFmt(macd)}</div>
         </div>
         <div class="ai-item">
           <div class="ai-item-lbl">EMA 20</div>
-          <div class="ai-item-val ${ema20Cls}">${ema20!=null?pFmt(ema20):'—'}</div>
+          <div class="ai-item-val ${ema20Cls}">${pFmt(ema20)}</div>
         </div>
         <div class="ai-item">
           <div class="ai-item-lbl">EMA 50</div>
-          <div class="ai-item-val ${ema50Cls}">${ema50!=null?pFmt(ema50):'—'}</div>
+          <div class="ai-item-val ${ema50Cls}">${pFmt(ema50)}</div>
         </div>
         <div class="ai-item">
           <div class="ai-item-lbl">MA Signal</div>
@@ -2533,10 +2608,10 @@ function initClock(){
       const el = document.getElementById('navClock');
       if(el) el.textContent = `${hh}:${mm}:${ss} ${tzLabel}`;
 
-      // WIT clock (UTC+9) under chart
+      // UTC clock under chart
       const witEl = document.getElementById('witClock');
       if(witEl){
-        const wH = String((now.getUTCHours() + 9) % 24).padStart(2,'0');
+        const wH = String(now.getUTCHours()).padStart(2,'0');
         const wM = String(now.getUTCMinutes()).padStart(2,'0');
         const wS = String(now.getUTCSeconds()).padStart(2,'0');
         witEl.textContent = `${wH}:${wM}:${wS}`;
