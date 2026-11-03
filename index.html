@@ -444,6 +444,173 @@ td:first-child{text-align:left;}
 .detail-logo-img{width:36px;height:36px;border-radius:50%;object-fit:cover;}
 .detail-icon-fb{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;
   justify-content:center;font-size:11px;font-weight:800;color:#fff;}
+
+/* ════════════════════════════════════════════════════════════════
+ * LIQUID GLASS SKIN (iOS-style)
+ * Visual layer only: translucency, blur, specular edges, ambient light.
+ * Does NOT change layout, sizes, spacing, data, or behavior.
+ * The [hidden] rule at the top of this sheet is intentionally untouched.
+ * ════════════════════════════════════════════════════════════════ */
+:root{
+  --glass-bg:      rgba(22,27,52,.52);
+  --glass-bg-2:    rgba(30,36,66,.42);
+  --glass-row-hv:  rgba(255,255,255,.045);
+  --glass-edge:    rgba(255,255,255,.11);
+  --glass-edge-2:  rgba(255,255,255,.18);
+  --glass-hl:      rgba(255,255,255,.16);
+  --glass-sheen:   rgba(255,255,255,.07);
+  --glass-shadow:  0 10px 34px rgba(0,0,0,.38), 0 1px 2px rgba(0,0,0,.25);
+  --glass-blur:    blur(26px) saturate(185%);
+  --amb-1: rgba(59,130,246,.26);
+  --amb-2: rgba(247,147,26,.17);
+  --amb-3: rgba(16,217,145,.14);
+  --amb-4: rgba(139,92,246,.15);
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --glass-bg:      rgba(255,255,255,.58);
+    --glass-bg-2:    rgba(255,255,255,.46);
+    --glass-row-hv:  rgba(255,255,255,.5);
+    --glass-edge:    rgba(255,255,255,.75);
+    --glass-edge-2:  rgba(255,255,255,.95);
+    --glass-hl:      rgba(255,255,255,.9);
+    --glass-sheen:   rgba(255,255,255,.45);
+    --glass-shadow:  0 10px 30px rgba(30,45,90,.10), 0 1px 2px rgba(30,45,90,.08);
+    --amb-1: rgba(59,130,246,.22);
+    --amb-2: rgba(247,147,26,.16);
+    --amb-3: rgba(16,217,145,.14);
+    --amb-4: rgba(168,85,247,.13);
+  }
+}
+:root[data-theme="light"]{
+  --glass-bg:      rgba(255,255,255,.58);
+  --glass-bg-2:    rgba(255,255,255,.46);
+  --glass-row-hv:  rgba(255,255,255,.5);
+  --glass-edge:    rgba(255,255,255,.75);
+  --glass-edge-2:  rgba(255,255,255,.95);
+  --glass-hl:      rgba(255,255,255,.9);
+  --glass-sheen:   rgba(255,255,255,.45);
+  --glass-shadow:  0 10px 30px rgba(30,45,90,.10), 0 1px 2px rgba(30,45,90,.08);
+  --amb-1: rgba(59,130,246,.22);
+  --amb-2: rgba(247,147,26,.16);
+  --amb-3: rgba(16,217,145,.14);
+  --amb-4: rgba(168,85,247,.13);
+}
+
+/* Ambient light field behind the glass (fixed layer; iOS Safari ignores
+   background-attachment:fixed, so a fixed pseudo-element is used instead) */
+body::before{
+  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(42vw 42vw at 8% 4%,   var(--amb-1), transparent 70%),
+    radial-gradient(38vw 38vw at 96% 12%, var(--amb-2), transparent 70%),
+    radial-gradient(46vw 46vw at 82% 92%, var(--amb-3), transparent 70%),
+    radial-gradient(40vw 40vw at 12% 86%, var(--amb-4), transparent 70%);
+}
+
+/* Shared glass material */
+.nav, .pf-banner, .metric, .chart-card, .tbl-wrap, .edit-bar,
+.modal-box, .detail-panel, .toast, .asset-dd{
+  background:
+    linear-gradient(180deg, var(--glass-sheen) 0%, transparent 42%),
+    var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+          backdrop-filter: var(--glass-blur);
+  border:1px solid var(--glass-edge);
+  box-shadow: var(--glass-shadow),
+              inset 0 1px 0 var(--glass-hl),
+              inset 0 -1px 0 rgba(255,255,255,.03);
+}
+.nav{ border-width:0 0 1px 0; box-shadow: 0 1px 0 var(--glass-edge), 0 8px 24px rgba(0,0,0,.12); }
+.edit-bar{ background:
+    linear-gradient(180deg, var(--glass-sheen) 0%, transparent 42%),
+    linear-gradient(0deg, var(--accent-bg), var(--accent-bg)),
+    var(--glass-bg);
+  border-color: rgba(59,130,246,.35); }
+
+/* Tables sit on the glass of .tbl-wrap — make rows transparent */
+thead th{ background: rgba(255,255,255,.025); border-bottom-color: var(--glass-edge); }
+tbody tr{ background: transparent; border-bottom-color: var(--glass-edge); }
+tbody tr:hover{ background: var(--glass-row-hv); }
+.tot-row{ background: var(--glass-bg-2) !important; border-top-color: var(--glass-edge-2) !important; }
+
+/* Inner tiles: a lighter, secondary glass */
+.detail-stat, .ai-item, .selected-asset-box{
+  background: var(--glass-bg-2);
+  border-color: var(--glass-edge);
+  box-shadow: inset 0 1px 0 var(--glass-hl);
+}
+
+/* Controls: capsule glass (same padding/size, only shape + material) */
+.btn, .dchip, .nav-clock, .badge, .add-btn, .curr-toggle{
+  background:
+    linear-gradient(180deg, var(--glass-sheen), transparent 60%),
+    var(--glass-bg-2);
+  -webkit-backdrop-filter: blur(14px) saturate(170%);
+          backdrop-filter: blur(14px) saturate(170%);
+  border-color: var(--glass-edge);
+  box-shadow: inset 0 1px 0 var(--glass-hl), 0 1px 3px rgba(0,0,0,.12);
+}
+.btn, .dchip, .nav-clock{ border-radius: 999px; }
+.btn:hover, .dchip:hover{ border-color: var(--glass-edge-2); }
+.btn-primary{
+  background: linear-gradient(180deg, rgba(255,255,255,.28), rgba(255,255,255,0) 55%), var(--accent);
+  border-color: rgba(255,255,255,.22);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 4px 14px rgba(59,130,246,.35);
+}
+.btn-primary:hover{ background: linear-gradient(180deg, rgba(255,255,255,.28), rgba(255,255,255,0) 55%), #2563eb; }
+.btn-success{
+  background: linear-gradient(180deg, rgba(255,255,255,.3), rgba(255,255,255,0) 55%), var(--green);
+  border-color: rgba(255,255,255,.25);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.4), 0 4px 14px rgba(16,217,145,.28);
+}
+.dchip.active{
+  background: linear-gradient(180deg, rgba(255,255,255,.14), transparent 60%), rgba(59,130,246,.22);
+  border-color: rgba(59,130,246,.65);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 2px 10px rgba(59,130,246,.25);
+}
+.nav-item.active{ background: var(--glass-bg-2); box-shadow: inset 0 1px 0 var(--glass-hl); border-radius: 999px; }
+.nav-item:hover{ background: var(--glass-row-hv); border-radius: 999px; }
+
+/* Pills get a soft specular top edge */
+.rpill, .chg-pill, .spill{ box-shadow: inset 0 1px 0 rgba(255,255,255,.08); }
+
+/* Overlays: frosted backdrop behind modals/sheets (visibility still via [hidden]) */
+.modal-overlay, .detail-overlay{
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+          backdrop-filter: blur(10px) saturate(140%);
+}
+
+/* Inputs: recessed glass */
+.modal-input, .modal-select, .e-input, .e-sm{
+  background: rgba(0,0,0,.18);
+  border-color: var(--glass-edge);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.18);
+}
+:root[data-theme="light"] .modal-input, :root[data-theme="light"] .modal-select,
+:root[data-theme="light"] .e-input, :root[data-theme="light"] .e-sm{ background: rgba(255,255,255,.6); }
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]) .modal-input, :root:not([data-theme="dark"]) .modal-select,
+  :root:not([data-theme="dark"]) .e-input, :root:not([data-theme="dark"]) .e-sm{ background: rgba(255,255,255,.6); }
+}
+
+/* Accessibility / fallback: solid surfaces when transparency is reduced or unsupported */
+@media (prefers-reduced-transparency: reduce){
+  .nav, .pf-banner, .metric, .chart-card, .tbl-wrap, .edit-bar, .modal-box, .detail-panel,
+  .toast, .asset-dd, .btn, .dchip, .nav-clock, .badge, .add-btn, .curr-toggle,
+  .modal-overlay, .detail-overlay{
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+  .nav, .pf-banner, .metric, .chart-card, .tbl-wrap, .modal-box, .detail-panel, .toast, .asset-dd{
+    background: var(--bg-card);
+  }
+  body::before{ display:none; }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))){
+  .nav, .pf-banner, .metric, .chart-card, .tbl-wrap, .modal-box, .detail-panel, .toast, .asset-dd{
+    background: var(--bg-card);
+  }
+}
 </style>
 
 <!-- NAV -->
@@ -1272,8 +1439,8 @@ function recalc(){
   if(chart){
     const pd = getPeriodData(activePeriod);
     const updated = [...(pd ? pd.values : (S.chartValues || DEF.chartValues))];
-    // Always set last point to current total (even if 0)
-    updated[updated.length-1] = Math.round(totalIDR);
+    // Pin the last point to the live total — except for a closed period (FY)
+    if(!(pd && pd.closed)) updated[updated.length-1] = Math.round(totalIDR);
     chart.data.datasets[0].data = updated;
     chart.update('none');
     updateChartPct(updated, totalIDR);
@@ -1585,7 +1752,8 @@ function switchPeriod(p){
       totalIDR += a.qty * usd * usdtIDR;
     }
   });
-  if(totalIDR > 0) vals[vals.length-1] = Math.round(totalIDR);
+  // A closed period (FY) ends in the past — keep its real last close
+  if(totalIDR > 0 && !pd.closed) vals[vals.length-1] = Math.round(totalIDR);
 
   chart.data.labels = labels;
   chart.data.datasets[0].data = vals;
@@ -1644,9 +1812,10 @@ const nowLinePlugin = {
 // Reconstructs portfolio value over time = Σ(qty × historical close) × USDT/IDR.
 // Replaces the old hardcoded placeholder series so each timeframe reflects real
 // market movement, the header date range is real, and direction/% are correct.
-async function binKlines(symbol, interval, limit, startTime){
+async function binKlines(symbol, interval, limit, startTime, endTime){
   let url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
   if(startTime) url += `&startTime=${startTime}`;
+  if(endTime)   url += `&endTime=${endTime}`;
   const r = await fetch(url, {signal: AbortSignal.timeout(10000)});
   if(!r.ok) throw new Error('klines '+r.status);
   return r.json(); // [[openTime,open,high,low,close,...], ...]
@@ -1674,13 +1843,17 @@ async function buildChartData(){
   const midnightUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   const jan1 = Date.UTC(now.getUTCFullYear(), 0, 1);
   const ytdDays = Math.min(Math.ceil((now - jan1)/86400000) + 1, 365);
+  // FY = last COMPLETE fiscal year (Indonesia: 1 Jan – 31 Dec), distinct from YTD
+  const fyYear  = now.getUTCFullYear() - 1;
+  const fyStart = Date.UTC(fyYear, 0, 1);
+  const fyEnd   = Date.UTC(fyYear + 1, 0, 1) - 1;
 
   const cfg = {
     today: {interval:'1h', startTime:midnightUTC, limit:24,      lk:'hour', sub:'Today · IDR'},
     '7d':  {interval:'4h', limit:42,                               lk:'day',  sub:'7 Days · IDR'},
     '12m': {interval:'1w', limit:53,                               lk:'mon',  sub:'12 Months · IDR'},
     ytd:   {interval:'1d', startTime:jan1, limit:ytdDays,          lk:'mon',  sub:'Year to Date · IDR'},
-    fy:    {interval:'1d', startTime:jan1, limit:ytdDays,          lk:'mon',  sub:'Financial Year · IDR'},
+    fy:    {interval:'1d', startTime:fyStart, endTime:fyEnd, limit:366, lk:'mon', sub:`FY ${fyYear} · IDR`, closed:true},
     all:   {interval:'1w', limit:160,                              lk:'mon',  sub:'All Time · IDR'},
   };
 
@@ -1688,7 +1861,7 @@ async function buildChartData(){
     try{
       const series = await Promise.all(held.map(async a => ({
         qty: a.qty,
-        kl: await binKlines(a.symbol+'USDT', c.interval, c.limit, c.startTime)
+        kl: await binKlines(a.symbol+'USDT', c.interval, c.limit, c.startTime, c.endTime)
       })));
       const valid = series.filter(s => Array.isArray(s.kl) && s.kl.length);
       if(!valid.length) continue;
@@ -1704,7 +1877,8 @@ async function buildChartData(){
         labels.push(fmtChartLabel(t, c.lk));
         values.push(Math.round(usdt * rate));
       }
-      chartData[period] = {labels, values, range: fmtChartRange(times[0], times[n-1]), sub: c.sub};
+      const rangeEnd = c.closed ? c.endTime : times[n-1];
+      chartData[period] = {labels, values, range: fmtChartRange(times[0], rangeEnd), sub: c.sub, closed: !!c.closed};
     }catch(e){ /* keep existing placeholder for this period */ }
   }
   if(chart) switchPeriod(activePeriod); // redraw current view with real data
